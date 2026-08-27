@@ -88,8 +88,13 @@ async function boot() {
   // 系列は増減するので、保存されたIDのうち今もあるものだけ拾う。
   const saved = loadSaved();
   if (saved) {
-    const alive = (saved.selected || []).filter((id) => state.byId[id]);
-    if (alive.length) state.selected = new Set(alive);
+    if (Array.isArray(saved.selected)) {
+      const alive = saved.selected.filter((id) => state.byId[id]);
+      // 全解除した状態も保存として尊重する。空＝未保存ではない。
+      // 保存はあるのに中身が全部消えた場合（系列の入れ替えなど）だけ既定へ戻す。
+      state.selected = new Set(
+        saved.selected.length === 0 ? [] : (alive.length ? alive : DEFAULT_SERIES));
+    }
     if (MODES.includes(saved.mode)) state.mode = saved.mode;
     if (typeof saved.showBoj === "boolean") state.showBoj = saved.showBoj;
     state.savedOpen = saved.openFamilies || null;
