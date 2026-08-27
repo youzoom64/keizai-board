@@ -21,7 +21,7 @@
 <div class="diag">
   <div class="head">
     <label>所見の対象期間
-      <select id="diag-horizon"></select>
+      <select id="diag-horizon" autocomplete="off"></select>
     </label>
     <span class="boj-next" id="boj-next"></span>
   </div>
@@ -49,11 +49,11 @@
 
 <div class="controls">
   <label>表示
-    <select id="mode"></select>
+    <select id="mode" autocomplete="off"></select>
   </label>
-  <label><input type="checkbox" id="show-boj" checked> 日銀会合</label>
-  <label>開始日 <input type="date" id="from"></label>
-  <label>終了日 <input type="date" id="to"></label>
+  <label><input type="checkbox" id="show-boj" autocomplete="off" checked> 日銀会合</label>
+  <label>開始日 <input type="date" id="from" autocomplete="off"></label>
+  <label>終了日 <input type="date" id="to" autocomplete="off"></label>
   <span class="status" id="range-label"></span>
   <span class="status">グラフ上を左ドラッグするとその区間を選べる（ダブルクリックで戻す）</span>
 </div>

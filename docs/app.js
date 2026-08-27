@@ -58,7 +58,7 @@ function buildControls() {
   const row = $("period-row");
   PERIODS.forEach(([label]) => {
     const l = document.createElement("label");
-    l.innerHTML = `<input type="radio" name="period" value="${label}"> ${label}`;
+    l.innerHTML = `<input type="radio" name="period" autocomplete="off" value="${label}"> ${label}`;
     l.querySelector("input").addEventListener("change", () => setPeriod(label));
     row.appendChild(l);
   });
@@ -94,7 +94,7 @@ function buildPickers(hostId, title, ids) {
     const l = document.createElement("label");
     l.style.color = s.color;
     l.title = s.note || s.label;
-    l.innerHTML = `<input type="checkbox" value="${id}"> ${s.short}`;
+    l.innerHTML = `<input type="checkbox" autocomplete="off" value="${id}"> ${s.short}`;
     const box = l.querySelector("input");
     box.checked = state.selected.has(id);
     box.addEventListener("change", () => {
