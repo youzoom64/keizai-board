@@ -27,6 +27,46 @@ const $ = (id) => document.getElementById(id);
 const iso = (dayNum) => new Date(dayNum * DAY * 1000).toISOString().slice(0, 10);
 const dayOf = (isoStr) => Math.round(Date.parse(isoStr + "T00:00:00Z") / 1000 / DAY);
 
+/* ------------------------------------------------------------------ 保存 */
+/* 選んだ状態をこのPCに覚えさせる。次に開いた時に同じ画面から始められる。
+   保存先はブラウザのlocalStorageで、外には出ない。 */
+const SAVE_KEY = "keizai-board/v1";
+
+function save() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      selected: [...state.selected],
+      mode: state.mode,
+      period: state.period,
+      from: state.from, to: state.to,
+      showBoj: state.showBoj,
+      diagHorizon: $("diag-horizon")?.value,
+      openFamilies: [...document.querySelectorAll(".families details")]
+        .filter((d) => d.open).map((d) => d.querySelector(".fam-name").textContent),
+      world: { indicator: w.indicator, countries: [...w.selected], period: w.period },
+    }));
+  } catch (err) {
+    // 保存できなくても動作には影響させない（プライベートモードなど）
+  }
+}
+
+function loadSaved() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+  } catch (err) {
+    return null;
+  }
+}
+
+function clearSaved() {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch (err) {
+    /* 消せなくても読み込み時に既定へ倒れる */
+  }
+  location.reload();
+}
+
 /* ------------------------------------------------------------------ 読み込み */
 async function boot() {
   try {
@@ -45,11 +85,32 @@ async function boot() {
     $("status").textContent = "読み込みに失敗: " + err.message;
     return;
   }
+  // 系列は増減するので、保存されたIDのうち今もあるものだけ拾う。
+  const saved = loadSaved();
+  if (saved) {
+    const alive = (saved.selected || []).filter((id) => state.byId[id]);
+    if (alive.length) state.selected = new Set(alive);
+    if (MODES.includes(saved.mode)) state.mode = saved.mode;
+    if (typeof saved.showBoj === "boolean") state.showBoj = saved.showBoj;
+    state.savedOpen = saved.openFamilies || null;
+  }
+
   buildControls();
+  if (saved && saved.diagHorizon) {
+    const sel = $("diag-horizon");
+    if ([...sel.options].some((o) => o.value === saved.diagHorizon)) sel.value = saved.diagHorizon;
+  }
   renderDiagnosis();
   renderTables();
   renderFooter();
-  setPeriod(DEFAULT_PERIOD);
+
+  if (saved && saved.period === null && saved.from && saved.to) {
+    setRange(saved.from, saved.to, null);
+  } else if (saved && PERIODS.some(([l]) => l === saved.period)) {
+    setPeriod(saved.period);
+  } else {
+    setPeriod(DEFAULT_PERIOD);
+  }
   $("status").textContent = `${state.board.generatedAt} 更新`;
 }
 
@@ -66,17 +127,20 @@ function buildControls() {
   const mode = $("mode");
   MODES.forEach((m) => mode.add(new Option(m, m)));
   mode.value = state.mode;
-  mode.addEventListener("change", () => { state.mode = mode.value; draw(); });
+  mode.addEventListener("change", () => { state.mode = mode.value; draw(); save(); });
 
-  $("show-boj").addEventListener("change", (e) => { state.showBoj = e.target.checked; draw(); });
+  const boj = $("show-boj");
+  boj.checked = state.showBoj;
+  boj.addEventListener("change", (e) => { state.showBoj = e.target.checked; draw(); save(); });
   $("from").addEventListener("change", onDateInput);
   $("to").addEventListener("change", onDateInput);
   $("copy").addEventListener("click", copyBoard);
+  $("reset").addEventListener("click", clearSaved);
 
   const horizon = $("diag-horizon");
   state.board.horizons.daily.forEach((h) => horizon.add(new Option(h, h)));
   horizon.value = state.board.diagnosis.horizon;
-  horizon.addEventListener("change", renderDiagnosis);
+  horizon.addEventListener("change", () => { renderDiagnosis(); save(); });
   // 所見はCI側で1ヶ月ぶんを計算済み。他の期間はブラウザ側で出し直す。
 
   buildFamilyPickers();
@@ -107,6 +171,7 @@ function buildFamilyPickers() {
         if (check.checked) state.selected.add(id); else state.selected.delete(id);
         updateFamilyCount(box, fam);
         draw();
+        save();
       });
       list.appendChild(l);
       state.series_checks[id] = check;
@@ -115,7 +180,10 @@ function buildFamilyPickers() {
     box.appendChild(head);
     box.appendChild(list);
     // 選んでいる系列が入っている分類は開いておく。それ以外は畳む。
-    box.open = fam.ids.some((id) => state.selected.has(id));
+    box.open = state.savedOpen
+      ? state.savedOpen.includes(fam.name)
+      : fam.ids.some((id) => state.selected.has(id));
+    box.addEventListener("toggle", save);
     host.appendChild(box);
     box._head = head;
     updateFamilyCount(box, fam);
@@ -168,6 +236,7 @@ function setRange(start, end, preset) {
   f.value = iso(start); t.value = iso(end);
   $("range-label").textContent = `${end - start}日間${preset ? "" : "（自由指定）"}`;
   draw();
+  save();
 }
 
 function onDateInput() {
@@ -618,6 +687,14 @@ async function bootWorld() {
   w.meta.countries.forEach((c) => { w.byCountry[c.key] = c; });
   w.indicator = w.meta.indicators[0].key;
 
+  const saved = (loadSaved() || {}).world;
+  if (saved) {
+    if (w.meta.indicators.some((i) => i.key === saved.indicator)) w.indicator = saved.indicator;
+    const alive = (saved.countries || []).filter((k) => w.byCountry[k]);
+    if (alive.length) w.selected = new Set(alive);
+    if (W_PERIODS.some(([l]) => l === saved.period)) w.period = saved.period;
+  }
+
   buildWorldControls();
   drawWorld();
 }
@@ -631,7 +708,7 @@ function buildWorldControls() {
     const r = l.querySelector("input");
     r.checked = i.key === w.indicator;
     r.addEventListener("change", () => {
-      if (r.checked) { w.indicator = i.key; drawWorld(); }
+      if (r.checked) { w.indicator = i.key; drawWorld(); save(); }
     });
     ind.appendChild(l);
   });
@@ -646,6 +723,7 @@ function buildWorldControls() {
     box.addEventListener("change", () => {
       if (box.checked) w.selected.add(c.key); else w.selected.delete(c.key);
       drawWorld();
+      save();
     });
     host.appendChild(l);
   });
@@ -657,7 +735,7 @@ function buildWorldControls() {
     const r = l.querySelector("input");
     r.checked = label === w.period;
     r.addEventListener("change", () => {
-      if (r.checked) { w.period = label; drawWorld(); }
+      if (r.checked) { w.period = label; drawWorld(); save(); }
     });
     per.appendChild(l);
   });
