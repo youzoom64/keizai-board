@@ -126,3 +126,9 @@ footer ul { padding-left: 18px; margin: 4px 0; }
                font-weight: 700; white-space: nowrap; }
 .w-rank .when { color: var(--muted); font-size: 11px; margin-left: 4px; font-weight: 400; }
 .w-rank .row.stale .num { color: var(--stale); }
+
+/* 他国グラフの凡例。色と国名の対応を常に見せる */
+#w-chart .u-legend { margin-top: 6px; font-size: 13px; }
+#w-chart .u-legend th, #w-chart .u-legend td { border: 0; padding: 2px 8px; white-space: nowrap; }
+#w-chart .u-legend .u-marker { width: 14px; height: 3px; border-radius: 2px; }
+#w-chart .u-legend .u-series.u-off { opacity: 0.35; }

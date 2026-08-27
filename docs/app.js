@@ -735,7 +735,8 @@ function drawWorld() {
     axes: [{ stroke: axisColor, grid, ticks: grid },
            { stroke: axisColor, grid, ticks: grid, label: `${meta.name}（${meta.unit}）` }],
     scales: { x: { time: true } },
-    legend: { show: false },
+    // 色と国名の対応が常に見えていないと、線がどの国か分からない。
+    legend: { show: true, live: true },
     cursor: { focus: { prox: 24 } },
     hooks: { setCursor: [onWorldCursor] },
   }, data, host);
