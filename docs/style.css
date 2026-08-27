@@ -178,3 +178,17 @@ footer ul { padding-left: 18px; margin: 4px 0; }
   background: var(--panel); color: var(--muted); font-weight: 700;
 }
 .families .clear-all:hover { color: var(--up); border-color: var(--up); }
+
+/* 日本のグラフの吹き出し。他国側と同じ見た目にする */
+#chart { position: relative; }
+#chart .tip {
+  position: absolute; z-index: 5; pointer-events: none;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+  padding: 5px 8px; font-size: 12px; line-height: 1.5;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28); white-space: nowrap;
+}
+#chart .tip .dot { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+#chart .tip .who { font-weight: 700; }
+#chart .tip .val { font-variant-numeric: tabular-nums; font-weight: 700; }
+#chart .tip .when { color: var(--muted); }

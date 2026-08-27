@@ -368,6 +368,8 @@ function draw() {
     state.plotted.push({ ...p, scale });
   });
 
+  state.tip = makeTip(host);
+
   const css = getComputedStyle(document.body);
   const grid = { stroke: css.getPropertyValue("--grid").trim(), width: 1 };
   const axisColor = css.getPropertyValue("--muted").trim();
@@ -465,20 +467,73 @@ function drawBojLines(u) {
 function onCursor(u) {
   const i = u.cursor.idx;
   const out = $("readout");
-  if (i == null) { out.textContent = "グラフ上にカーソルを置くとその日の値が出る"; return; }
+  if (i == null) {
+    out.textContent = "グラフ上にカーソルを置くとその日の値が出る";
+    hideTip(state.tip);
+    return;
+  }
   const day = Math.round(u.data[0][i] / DAY);
 
   if (u.select && u.select.width > 4) {
     const a = Math.round(u.posToVal(u.select.left, "x") / DAY);
     const b = Math.round(u.posToVal(u.select.left + u.select.width, "x") / DAY);
     out.textContent = spanText(a, b);
+    hideTip(state.tip);
     return;
   }
+
+  // 読み取り行は選んだ全系列。吹き出しは触れている1本だけ。
   const parts = state.plotted.map((p) => {
     const v = nearestRaw(p, day);
     return v === null ? null : `${p.meta.label} ${fmtValue(p.meta, v)}`;
   }).filter(Boolean);
   out.textContent = `${iso(day)}　|　${parts.join("　")}`;
+
+  const hit = nearestSeries(u, i);
+  if (!hit) { hideTip(state.tip); return; }
+  const p = state.plotted[hit.si - 1];
+  const raw = nearestRaw(p, day);
+  if (raw === null) { hideTip(state.tip); return; }
+  showTip(state.tip, u, hit.y, p.meta.color, p.meta.label, fmtValue(p.meta, raw), iso(day));
+}
+
+/* カーソルのY座標に一番近い線を探す。触れている線だけを吹き出しに出すため。 */
+function nearestSeries(u, idx) {
+  if (u.cursor.top == null || u.cursor.top < 0) return null;
+  let hit = null, best = Infinity;
+  for (let si = 1; si < u.series.length; si++) {
+    const value = u.data[si][idx];
+    if (value == null) continue;
+    const y = u.valToPos(value, u.series[si].scale);
+    const dist = Math.abs(y - u.cursor.top);
+    if (dist < best) { best = dist; hit = { si, y }; }
+  }
+  return best <= HIT_RADIUS ? hit : null;
+}
+
+function makeTip(host) {
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  tip.style.display = "none";
+  host.appendChild(tip);
+  return tip;
+}
+
+function hideTip(tip) {
+  if (tip) tip.style.display = "none";
+}
+
+function showTip(tip, u, y, color, name, value, when) {
+  if (!tip) return;
+  tip.innerHTML = `<span class="dot" style="background:${color}"></span>` +
+    `<span class="who">${name}</span><span class="val">${value}</span>` +
+    `<span class="when">${when}</span>`;
+  tip.style.display = "flex";
+  const box = tip.getBoundingClientRect();
+  const right = u.cursor.left + 14;
+  tip.style.left = (right + box.width > u.over.clientWidth
+    ? u.cursor.left - box.width - 14 : right) + "px";
+  tip.style.top = Math.max(0, y - box.height - 10) + "px";
 }
 
 function nearestRaw(p, day) {
