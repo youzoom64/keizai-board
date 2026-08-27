@@ -1,0 +1,112 @@
+/* 明暗どちらのテーマでも読めるようにトークンで持つ。 */
+:root {
+  --bg: #ffffff;
+  --panel: #f7f7f8;
+  --border: #d8d8dc;
+  --text: #1c1c1f;
+  --muted: #5f6069;
+  --up: #c0392b;
+  --down: #1f6fb4;
+  --alert-bg: #ffe9e0;
+  --alert-fg: #8a2b12;
+  --stale: #b06000;
+  --boj: #7a5ea8;
+  --grid: #e2e2e6;
+  --accent: #2b5fa8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181c;
+    --panel: #202127;
+    --border: #34353d;
+    --text: #e6e6ea;
+    --muted: #9a9ba5;
+    --up: #ff6b5a;
+    --down: #5aa9ff;
+    --alert-bg: #4a1f14;
+    --alert-fg: #ffb9a6;
+    --stale: #e0a25a;
+    --boj: #a98fdb;
+    --grid: #2c2d35;
+    --accent: #7aa8ff;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Yu Gothic UI", "Meiryo", "Hiragino Sans", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+h1 { font-size: 18px; margin: 0 0 4px; }
+h2 { font-size: 14px; margin: 0 0 6px; color: var(--muted); font-weight: 600; }
+a { color: var(--accent); }
+
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.bar .grow { flex: 1 1 auto; }
+button {
+  font: inherit; padding: 5px 12px; cursor: pointer;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px;
+}
+button:hover { border-color: var(--accent); }
+.status { color: var(--muted); font-size: 13px; }
+
+/* ---- 所見 ---- */
+.diag {
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel); padding: 10px 12px; margin-bottom: 12px;
+}
+.diag .head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 4px; }
+.diag .headline { font-size: 17px; font-weight: 700; }
+.diag .reason { color: var(--muted); }
+.diag .facts { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.diag .context { margin: 6px 0 0; padding-left: 18px; color: var(--text); }
+.diag .context li { margin: 1px 0; }
+.diag .alert { color: var(--up); font-weight: 600; margin-top: 4px; }
+.boj-next { margin-left: auto; color: var(--boj); font-weight: 700; }
+
+/* ---- 表 ---- */
+.tables { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; }
+.tables section { flex: 1 1 460px; min-width: 0; }
+.scroll-x { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 3px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { text-align: right; color: var(--muted); font-weight: 600; font-size: 12px; }
+th:first-child, td:first-child { text-align: left; }
+td { text-align: right; }
+td.name { font-weight: 700; }
+td.value { font-weight: 700; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.stale { color: var(--stale); }
+td.hot { background: var(--alert-bg); color: var(--alert-fg); font-weight: 700; }
+
+/* ---- グラフ ---- */
+.controls { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 6px; }
+.controls label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pickers { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px; }
+.pickers .group { color: var(--muted); align-self: center; }
+.pickers label { font-weight: 700; white-space: nowrap; }
+select, input[type=date] {
+  font: inherit; padding: 3px 6px; border-radius: 5px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+}
+.readout {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 5px;
+  padding: 5px 8px; min-height: 30px; margin-bottom: 6px;
+  font-variant-numeric: tabular-nums; word-break: break-word;
+}
+.chart-notes { color: var(--stale); font-size: 13px; margin-bottom: 4px; min-height: 0; }
+#chart { min-height: 360px; }
+
+footer { margin-top: 20px; color: var(--muted); font-size: 12px; }
+footer ul { padding-left: 18px; margin: 4px 0; }
+
+/* uPlot の配色をテーマに合わせる */
+.uplot, .u-title, .u-legend { color: var(--text); font-family: inherit; }
+.u-select { background: rgba(120, 140, 200, 0.18); }

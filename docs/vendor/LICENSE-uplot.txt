@@ -1,0 +1,6 @@
+MIT License
+
+Copyright (c) 2022 Leon Sorokin
+
+uPlot (https://github.com/leeoniya/uPlot) is bundled under docs/vendor/.
+See the upstream repository for the full license text.

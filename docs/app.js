@@ -1,0 +1,564 @@
+"use strict";
+/* 経済ボード。JSONを読んで盤面とグラフを出す。
+   計算の流儀（bp / % / pt の使い分け、判定のしきい値）は collector/analyze.py に合わせてある。 */
+
+const DAY = 86400;
+const PERIODS = [
+  ["1日", 1], ["1週", 7], ["1ヶ月", 31], ["四半期", 92],
+  ["1年", 366], ["5年", 1827], ["10年", 3653], ["全期間", 0],
+];
+const DEFAULT_PERIOD = "1年";
+const MODE_DELTA = "開始日からの動き";
+const MODE_INDEX = "開始日を100とした指数";
+const MODE_RAW = "実数（そのままの値）";
+const MODES = [MODE_DELTA, MODE_INDEX, MODE_RAW];
+const DEFAULT_SERIES = ["jgb10y", "jgb2y", "usdjpy"];
+const FLATTEN_RATIO = 5;   // 同じ軸で値幅がこの倍率を超えたら小さい方は平らに見える
+const BOJ_LINE_LIMIT = 20; // 縦線がこれを超える期間では引かない
+
+const state = {
+  meta: null, series: null, board: null, boj: [],
+  byId: {}, selected: new Set(DEFAULT_SERIES),
+  mode: MODE_DELTA, period: DEFAULT_PERIOD,
+  from: null, to: null, showBoj: true, plot: null, plotted: [],
+};
+
+const $ = (id) => document.getElementById(id);
+const iso = (dayNum) => new Date(dayNum * DAY * 1000).toISOString().slice(0, 10);
+const dayOf = (isoStr) => Math.round(Date.parse(isoStr + "T00:00:00Z") / 1000 / DAY);
+
+/* ------------------------------------------------------------------ 読み込み */
+async function boot() {
+  try {
+    const [meta, series, board, boj] = await Promise.all(
+      ["meta", "series", "board", "boj"].map((n) =>
+        fetch(`data/${n}.json`, { cache: "no-cache" }).then((r) => {
+          if (!r.ok) throw new Error(`data/${n}.json が読めない (${r.status})`);
+          return r.json();
+        })));
+    state.meta = meta;
+    state.series = series;
+    state.board = board;
+    state.boj = boj.meetings || [];
+    meta.series.forEach((s) => { state.byId[s.id] = s; });
+  } catch (err) {
+    $("status").textContent = "読み込みに失敗: " + err.message;
+    return;
+  }
+  buildControls();
+  renderDiagnosis();
+  renderTables();
+  renderFooter();
+  setPeriod(DEFAULT_PERIOD);
+  $("status").textContent = `${state.board.generatedAt} 更新`;
+}
+
+/* ------------------------------------------------------------------ 部品 */
+function buildControls() {
+  const row = $("period-row");
+  PERIODS.forEach(([label]) => {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="radio" name="period" value="${label}"> ${label}`;
+    l.querySelector("input").addEventListener("change", () => setPeriod(label));
+    row.appendChild(l);
+  });
+
+  const mode = $("mode");
+  MODES.forEach((m) => mode.add(new Option(m, m)));
+  mode.value = state.mode;
+  mode.addEventListener("change", () => { state.mode = mode.value; draw(); });
+
+  $("show-boj").addEventListener("change", (e) => { state.showBoj = e.target.checked; draw(); });
+  $("from").addEventListener("change", onDateInput);
+  $("to").addEventListener("change", onDateInput);
+  $("copy").addEventListener("click", copyBoard);
+
+  const horizon = $("diag-horizon");
+  state.board.horizons.daily.forEach((h) => horizon.add(new Option(h, h)));
+  horizon.value = state.board.diagnosis.horizon;
+  horizon.addEventListener("change", renderDiagnosis);
+  // 所見はCI側で1ヶ月ぶんを計算済み。他の期間はブラウザ側で出し直す。
+
+  buildPickers("pick-daily", "日次", state.meta.dailyIds);
+  buildPickers("pick-monthly", "月次", state.meta.monthlyIds);
+}
+
+function buildPickers(hostId, title, ids) {
+  const host = $(hostId);
+  const head = document.createElement("span");
+  head.className = "group";
+  head.textContent = title;
+  host.appendChild(head);
+  ids.forEach((id) => {
+    const s = state.byId[id];
+    const l = document.createElement("label");
+    l.style.color = s.color;
+    l.title = s.note || s.label;
+    l.innerHTML = `<input type="checkbox" value="${id}"> ${s.short}`;
+    const box = l.querySelector("input");
+    box.checked = state.selected.has(id);
+    box.addEventListener("change", () => {
+      if (box.checked) state.selected.add(id); else state.selected.delete(id);
+      draw();
+    });
+    host.appendChild(l);
+  });
+}
+
+/* ------------------------------------------------------------------ 期間 */
+function anchorDay() {
+  let last = -Infinity;
+  state.meta.dailyIds.forEach((id) => {
+    const s = state.series[id];
+    if (s && s.t.length) last = Math.max(last, s.t[s.t.length - 1]);
+  });
+  return isFinite(last) ? last : dayOf(state.board.generatedAt);
+}
+
+function earliestDay() {
+  let first = Infinity;
+  Object.values(state.series).forEach((s) => {
+    if (s.t.length) first = Math.min(first, s.t[0]);
+  });
+  return isFinite(first) ? first : anchorDay();
+}
+
+function setPeriod(label) {
+  const days = PERIODS.find(([l]) => l === label)[1];
+  const end = anchorDay();
+  const start = days ? end - days : earliestDay();
+  setRange(start, end, label);
+}
+
+function setRange(start, end, preset) {
+  if (start > end) [start, end] = [end, start];
+  state.from = start;
+  state.to = end;
+  state.period = preset || null;
+  document.querySelectorAll('input[name=period]').forEach((r) => {
+    r.checked = r.value === preset;
+  });
+  const lo = earliestDay(), hi = anchorDay();
+  const f = $("from"), t = $("to");
+  f.min = t.min = iso(lo); f.max = t.max = iso(hi);
+  f.value = iso(start); t.value = iso(end);
+  $("range-label").textContent = `${end - start}日間${preset ? "" : "（自由指定）"}`;
+  draw();
+}
+
+function onDateInput() {
+  const a = $("from").value, b = $("to").value;
+  if (!a || !b) return;
+  setRange(dayOf(a), dayOf(b), null);
+}
+
+/* ------------------------------------------------------------------ 変換 */
+function windowPoints(id) {
+  const s = state.series[id];
+  if (!s) return { t: [], v: [] };
+  const t = [], v = [];
+  for (let i = 0; i < s.t.length; i++) {
+    if (s.t[i] >= state.from && s.t[i] <= state.to) { t.push(s.t[i]); v.push(s.v[i]); }
+  }
+  return { t, v };
+}
+
+function transform(meta, values) {
+  // 前年比や倍の水準は、指数化しても変化幅にしても意味が薄いのでそのまま描く。
+  if (meta.alwaysRaw) return { ys: values.slice(), unit: meta.group };
+  const base = values[0];
+  if (state.mode === MODE_INDEX) {
+    if (!base) return { ys: values.map(() => 0), unit: "開始日=100" };
+    return { ys: values.map((v) => v / base * 100), unit: "開始日=100" };
+  }
+  if (state.mode === MODE_DELTA) {
+    if (meta.diff === "bp") {
+      return { ys: values.map((v) => (v - base) * 100), unit: "開始日からの動き（bp）" };
+    }
+    if (!base) return { ys: values.map(() => 0), unit: "開始日からの動き（%）" };
+    return { ys: values.map((v) => (v - base) / base * 100), unit: "開始日からの動き（%）" };
+  }
+  return { ys: values.slice(), unit: meta.group };
+}
+
+function changeText(meta, latest, past) {
+  if (meta.diff === "bp") return fmtSigned((latest - past) * 100, 1) + "bp";
+  if (meta.diff === "pt") return fmtSigned(latest - past, Math.max(meta.decimals, 1)) + "pt";
+  if (!past) return "-";
+  return fmtSigned((latest - past) / past * 100, 2) + "%";
+}
+
+const fmtSigned = (n, d) => (n >= 0 ? "+" : "") + n.toFixed(d);
+const fmtValue = (meta, v) =>
+  v.toLocaleString("ja-JP", { minimumFractionDigits: meta.decimals,
+                              maximumFractionDigits: meta.decimals }) + meta.suffix;
+
+/* ------------------------------------------------------------------ 描画 */
+function draw() {
+  const host = $("chart");
+  if (state.plot) { state.plot.destroy(); state.plot = null; }
+  host.innerHTML = "";
+  state.plotted = [];
+
+  const chosen = [...state.selected].map((id) => state.byId[id]).filter(Boolean);
+  if (!chosen.length) {
+    host.innerHTML = '<p class="status">系列を選ぶとグラフが出る</p>';
+    $("chart-notes").textContent = "";
+    return;
+  }
+
+  // x軸は選んだ系列の日付の和集合。月次は日次と日付が合わないので穴を空けて繋ぐ。
+  const daySet = new Set();
+  const prepared = [];
+  chosen.forEach((meta) => {
+    const { t, v } = windowPoints(meta.id);
+    if (!t.length) return;
+    const { ys, unit } = transform(meta, v);
+    const map = new Map();
+    t.forEach((d, i) => map.set(d, ys[i]));
+    const rawMap = new Map();
+    t.forEach((d, i) => rawMap.set(d, v[i]));
+    t.forEach((d) => daySet.add(d));
+    prepared.push({ meta, map, rawMap, unit, span: Math.max(...ys) - Math.min(...ys), n: t.length });
+  });
+  if (!prepared.length) {
+    host.innerHTML = '<p class="status">この期間にデータが無い</p>';
+    $("chart-notes").textContent = "";
+    return;
+  }
+
+  const days = [...daySet].sort((a, b) => a - b);
+  const xs = days.map((d) => d * DAY);
+  const data = [xs];
+  const uSeries = [{}];
+  let leftUnit = null, rightUnit = null;
+  const extraUnits = [];
+
+  prepared.forEach((p) => {
+    let scale;
+    if (leftUnit === null || p.unit === leftUnit) { leftUnit = p.unit; scale = "L"; }
+    else if (rightUnit === null || p.unit === rightUnit) { rightUnit = p.unit; scale = "R"; }
+    else { if (!extraUnits.includes(p.unit)) extraUnits.push(p.unit); scale = "R"; }
+
+    data.push(days.map((d) => (p.map.has(d) ? p.map.get(d) : null)));
+    uSeries.push({
+      label: p.meta.label + (scale === "R" ? "［右軸］" : ""),
+      stroke: p.meta.color,
+      width: 1.6,
+      scale,
+      spanGaps: true,
+      dash: p.meta.cycle === "D" ? undefined : [6, 4],
+      points: { show: p.n <= 5, size: 7 },
+    });
+    state.plotted.push({ ...p, scale });
+  });
+
+  const css = getComputedStyle(document.body);
+  const grid = { stroke: css.getPropertyValue("--grid").trim(), width: 1 };
+  const axisColor = css.getPropertyValue("--muted").trim();
+
+  const axes = [
+    { stroke: axisColor, grid, ticks: grid },
+    { stroke: axisColor, grid, ticks: grid, scale: "L", label: leftUnit || "" },
+  ];
+  if (rightUnit) {
+    axes.push({ stroke: axisColor, grid: { show: false }, ticks: grid,
+                scale: "R", side: 1, label: rightUnit });
+  }
+
+  const opts = {
+    width: host.clientWidth || 900,
+    height: Math.max(360, Math.round(window.innerHeight * 0.42)),
+    series: uSeries,
+    axes,
+    scales: { x: { time: true }, L: {}, R: {} },
+    legend: { show: false },
+    cursor: { drag: { x: true, y: false }, focus: { prox: 24 } },
+    hooks: {
+      setCursor: [onCursor],
+      setSelect: [onSelect],
+      draw: [drawBojLines],
+    },
+  };
+  state.plot = new uPlot(opts, data, host);
+  host.ondblclick = () => setPeriod(state.period || DEFAULT_PERIOD);
+
+  $("chart-notes").textContent = buildNotes(extraUnits).join("　※");
+  window.onresize = () => {
+    if (state.plot) state.plot.setSize({ width: host.clientWidth, height: state.plot.height });
+  };
+}
+
+function buildNotes(extraUnits) {
+  const notes = [];
+  const inWindow = state.boj.filter((m) => {
+    const d = dayOf(m.start);
+    return d >= state.from && d <= state.to;
+  });
+  if (state.showBoj && inWindow.length > BOJ_LINE_LIMIT) {
+    notes.push(`日銀会合${inWindow.length}回は多すぎるため縦線は省略`);
+  }
+  if (extraUnits.length) {
+    notes.push("単位が3種類以上あり実数では比べにくい。指数表示を推奨");
+  }
+  // 同じ軸に載った系列の値幅が開きすぎていないか見る。
+  const byScale = {};
+  state.plotted.forEach((p) => { (byScale[p.scale] = byScale[p.scale] || []).push(p); });
+  Object.values(byScale).forEach((group) => {
+    if (group.length < 2) return;
+    const big = group.reduce((a, b) => (a.span > b.span ? a : b));
+    const small = group.reduce((a, b) => (a.span < b.span ? a : b));
+    if (!(small.span > 0) || big.span / small.span < FLATTEN_RATIO) return;
+    const advice = small.meta.group !== big.meta.group
+      ? `「${MODE_RAW}」に切り替えると別々の軸で読める`
+      : `「${MODE_DELTA}」に切り替えると比べやすい`;
+    notes.push(`${small.meta.label}は${big.meta.label}の1/${(big.span / small.span).toFixed(0)}`
+      + `の値幅しかなくこの縮尺では平らに見える。${advice}`);
+  });
+  return notes.length ? [""].concat(notes).slice(1) : [];
+}
+
+function drawBojLines(u) {
+  if (!state.showBoj) return;
+  const inWindow = state.boj.filter((m) => {
+    const d = dayOf(m.start);
+    return d >= state.from && d <= state.to;
+  });
+  if (!inWindow.length || inWindow.length > BOJ_LINE_LIMIT) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const ctx = u.ctx;
+  const color = getComputedStyle(document.body).getPropertyValue("--boj").trim();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(u.bbox.left, u.bbox.top, u.bbox.width, u.bbox.height);
+  ctx.clip();
+  ctx.globalAlpha = 0.55;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  inWindow.forEach((m) => {
+    const x = u.valToPos(dayOf(m.start) * DAY, "x", true);
+    ctx.setLineDash(m.start > today ? [3, 3] : []);
+    ctx.beginPath();
+    ctx.moveTo(x, u.bbox.top);
+    ctx.lineTo(x, u.bbox.top + u.bbox.height);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ カーソル */
+function onCursor(u) {
+  const i = u.cursor.idx;
+  const out = $("readout");
+  if (i == null) { out.textContent = "グラフ上にカーソルを置くとその日の値が出る"; return; }
+  const day = Math.round(u.data[0][i] / DAY);
+
+  if (u.select && u.select.width > 4) {
+    const a = Math.round(u.posToVal(u.select.left, "x") / DAY);
+    const b = Math.round(u.posToVal(u.select.left + u.select.width, "x") / DAY);
+    out.textContent = spanText(a, b);
+    return;
+  }
+  const parts = state.plotted.map((p) => {
+    const v = nearestRaw(p, day);
+    return v === null ? null : `${p.meta.label} ${fmtValue(p.meta, v)}`;
+  }).filter(Boolean);
+  out.textContent = `${iso(day)}　|　${parts.join("　")}`;
+}
+
+function nearestRaw(p, day) {
+  if (p.rawMap.has(day)) return p.rawMap.get(day);
+  // 月次は日付が飛ぶので、その日以前で一番近い値を拾う。
+  let best = null, bestDay = -Infinity;
+  p.rawMap.forEach((v, d) => { if (d <= day && d > bestDay) { bestDay = d; best = v; } });
+  return best;
+}
+
+function spanText(a, b) {
+  if (a > b) [a, b] = [b, a];
+  const parts = state.plotted.map((p) => {
+    const from = nearestRaw(p, a), to = nearestRaw(p, b);
+    if (from === null || to === null || from === to) return null;
+    return `${p.meta.label} ${changeText(p.meta, to, from)}`;
+  }).filter(Boolean);
+  return `${iso(a)} 〜 ${iso(b)}（${b - a}日間）　|　${parts.join("　")}`;
+}
+
+function onSelect(u) {
+  if (!u.select || u.select.width < 6) return;
+  const a = Math.round(u.posToVal(u.select.left, "x") / DAY);
+  const b = Math.round(u.posToVal(u.select.left + u.select.width, "x") / DAY);
+  if (Math.abs(b - a) < 3) return;
+  u.setSelect({ width: 0, height: 0 }, false);
+  setRange(a, b, null);
+}
+
+/* ------------------------------------------------------------------ 盤面 */
+function renderTables() {
+  fillTable($("daily-table"), state.board.daily, state.board.horizons.daily, true);
+  const heads = state.board.horizons.monthly;
+  fillTable($("monthly-table"), state.board.monthly, heads, false, state.board.horizons.quarterly);
+}
+
+function fillTable(table, rows, heads, withSigma, altHeads) {
+  const cols = ["指標", "最新値", withSigma ? "日付" : "時点", ...heads];
+  if (withSigma) cols.push("異常度");
+  table.innerHTML = "";
+  const thead = table.createTHead().insertRow();
+  cols.forEach((c) => { const th = document.createElement("th"); th.textContent = c; thead.appendChild(th); });
+
+  const body = table.createTBody();
+  rows.forEach((r) => {
+    const meta = state.byId[r.id];
+    const tr = body.insertRow();
+    const name = tr.insertCell();
+    name.className = "name";
+    name.style.color = meta.color;
+    name.textContent = meta.label;
+    name.title = meta.note || meta.label;
+    if (r.empty) {
+      tr.insertCell().textContent = "データ無し";
+      for (let i = 2; i < cols.length; i++) tr.insertCell().textContent = "-";
+      return;
+    }
+    const val = tr.insertCell(); val.className = "value"; val.textContent = r.valueText;
+    const when = tr.insertCell();
+    when.textContent = r.period;
+    if (isStale(meta, r)) { when.className = "stale"; when.title = `${r.staleDays}日前のデータ`; }
+
+    const names = (meta.cycle === "Q" && altHeads) ? altHeads : heads;
+    names.forEach((h) => {
+      const cell = tr.insertCell();
+      cell.textContent = r.changes[h] ?? "-";
+      cell.title = h;
+      const n = r.raw[h];
+      if (n != null && n !== 0) cell.className = n > 0 ? "up" : "down";
+    });
+    if (withSigma) {
+      const z = tr.insertCell();
+      z.textContent = r.z == null ? "-" : Math.abs(r.z).toFixed(1) + "σ";
+      if (r.z != null && Math.abs(r.z) >= state.board.sigmaAlert) {
+        z.className = "hot";
+        z.title = "平常の日次変動から大きく外れている";
+      }
+    }
+  });
+}
+
+function isStale(meta, r) {
+  if (meta.cycle === "D") return (r.staleDays || 0) >= state.board.staleDays;
+  const limit = state.board.staleMonths[meta.cycle] ?? 3;
+  return (r.monthsBehind || 0) >= limit;
+}
+
+/* 所見。CIが1ヶ月ぶんを計算済みなので、他の期間を選んだ時だけブラウザ側で作り直す。 */
+function renderDiagnosis() {
+  const horizon = $("diag-horizon").value;
+  const d = horizon === state.board.diagnosis.horizon
+    ? state.board.diagnosis : diagnose(horizon);
+  $("diag-headline").textContent = d.headline;
+  $("diag-reason").textContent = d.reason;
+  $("diag-facts").textContent = d.facts.join(" ／ ");
+  const ul = $("diag-context");
+  ul.innerHTML = "";
+  (d.context || []).forEach((c) => {
+    const li = document.createElement("li"); li.textContent = c; ul.appendChild(li);
+  });
+  const alerts = state.board.alerts;
+  $("diag-alert").textContent = alerts.length ? "平常より大きい動き: " + alerts.join(" / ") : "";
+
+  const today = new Date().toISOString().slice(0, 10);
+  const next = state.boj.find((m) => m.end >= today);
+  $("boj-next").textContent = next
+    ? `次の日銀会合 ${next.start}（あと${Math.round((Date.parse(next.start) - Date.parse(today)) / 86400000)}日）` : "";
+}
+
+const BP_MOVE = 10, BP_FLAT = 5, FX_MOVE = 0.5, GLOBAL_GAP = 8;
+
+function pick(id, horizon) {
+  const r = state.board.daily.find((x) => x.id === id);
+  return r && !r.empty ? r.raw[horizon] ?? null : null;
+}
+
+function diagnose(horizon) {
+  const d2 = pick("jgb2y", horizon), d10 = pick("jgb10y", horizon);
+  const d30 = pick("jgb30y", horizon), us10 = pick("ust10y", horizon);
+  const fx = pick("usdjpy", horizon);
+  const facts = [];
+  const add = (l, v, f) => { if (v != null) facts.push(l + " " + f(v)); };
+  add("日本10年", d10, (v) => fmtSigned(v, 1) + "bp");
+  add("2年", d2, (v) => fmtSigned(v, 1) + "bp");
+  add("30年", d30, (v) => fmtSigned(v, 1) + "bp");
+  add("米10年", us10, (v) => fmtSigned(v, 1) + "bp");
+  add("ドル円", fx, (v) => fmtSigned(v, 2) + "%");
+
+  const ctx = state.board.diagnosis.context;
+  const out = (headline, reason) => ({ headline, reason, facts, context: ctx, horizon });
+  if (d10 == null) return out("判定できない（10年国債のデータが無い）", "");
+
+  let curve = "";
+  if (d30 != null && d2 != null) {
+    const c = d30 - d2;
+    curve = c > BP_FLAT ? "カーブはスティープ化（超長期が短期より上）。"
+      : c < -BP_FLAT ? "カーブはフラット化（短期が超長期より上）。" : "カーブの傾きはほぼ不変。";
+  }
+  if (Math.abs(d10) < BP_MOVE) {
+    return out("長期金利は横ばい圏",
+      `日本10年の${horizon}変化が±${BP_MOVE}bp未満。${curve}`);
+  }
+  const up = d10 > 0, dir = up ? "上昇" : "低下";
+  if (us10 != null && us10 * d10 > 0 && Math.abs(d10 - us10) < GLOBAL_GAP) {
+    return out(`世界的な金利${dir}に連動している可能性`,
+      `日本10年 ${fmtSigned(d10, 1)}bp に対し米10年 ${fmtSigned(us10, 1)}bp と差が${GLOBAL_GAP}bp未満。`
+      + `日本固有の材料(財政・日銀)だけでは説明しきれない。${curve}`);
+  }
+  if (d2 != null && d2 * d10 > 0 && Math.abs(d2) >= BP_FLAT) {
+    if (fx != null && ((up && fx < -FX_MOVE) || (!up && fx > FX_MOVE))) {
+      return out(`日銀の利${up ? "上" : "下"}げ期待が主因の形`,
+        `2年 ${fmtSigned(d2, 1)}bp と10年 ${fmtSigned(d10, 1)}bp が同方向に動き、`
+        + `同時に${up ? "円高" : "円安"}(${fmtSigned(fx, 2)}%)。`
+        + `政策金利の織り込みが変化した時の典型的な形。${curve}`);
+    }
+    return out(`短期金利を伴う金利${dir}`,
+      `2年 ${fmtSigned(d2, 1)}bp も同方向。政策期待の変化が効いている可能性。`
+      + `ただし為替がその形に整合していないため断定はできない。${curve}`);
+  }
+  if (d2 != null && Math.abs(d2) < BP_FLAT) {
+    if (d30 != null && Math.abs(d30) > Math.abs(d10)) {
+      return out("財政・国債需給・長期インフレ懸念が主因の形",
+        `2年は ${fmtSigned(d2, 1)}bp とほぼ動かない一方、30年が ${fmtSigned(d30, 1)}bp と`
+        + `10年(${fmtSigned(d10, 1)}bp)より大きく動いている。日銀の政策期待では説明しにくく、`
+        + `国債の需給や長期のインフレ観に効く材料(増発・減税・積極財政)を見る場面。${curve}`);
+    }
+    return out(`短期金利を伴わない長期金利${dir}`,
+      `2年が ${fmtSigned(d2, 1)}bp とほぼ動かないまま10年が ${fmtSigned(d10, 1)}bp。`
+      + `日銀の政策期待以外の材料を疑う場面。${curve}`);
+  }
+  return out(`長期金利が${dir}（主因は特定できない）`,
+    `日本10年 ${fmtSigned(d10, 1)}bp。他の系列と整合する型が無い。${curve}`);
+}
+
+/* ------------------------------------------------------------------ その他 */
+async function copyBoard() {
+  try {
+    const md = await fetch("data/board.md", { cache: "no-cache" }).then((r) => r.text());
+    await navigator.clipboard.writeText(md);
+    $("status").textContent = `盤面をコピーした（${md.split("\n").length}行）`;
+  } catch (err) {
+    $("status").textContent = "コピーできなかった: " + err.message;
+  }
+}
+
+function renderFooter() {
+  const ul = $("sources");
+  state.meta.sources.forEach((s) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<a href="${s.url}" rel="noopener">${s.name}</a> — ${s.series.join("・")}`;
+    ul.appendChild(li);
+  });
+  $("generated").textContent =
+    `データ生成: ${state.meta.generatedAt}　／　金利の差分はbp、為替・株・商品は変化率%、`
+    + `前年比などの水準はポイント（pt）で表している。`;
+}
+
+boot();

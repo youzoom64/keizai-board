@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>経済ボード — 日本の金利・為替・物価をまとめて見る</title>
+<meta name="description" content="日本の長期金利・為替・株価と、消費者物価・企業物価・賃金・雇用・GDPを1画面に並べ、金利が動いた原因の当たりを付けるための盤面。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/uplot.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="bar">
+  <h1>経済ボード</h1>
+  <span class="grow"></span>
+  <button id="copy">盤面をコピー</button>
+  <span class="status" id="status">読み込み中…</span>
+</div>
+
+<div class="diag">
+  <div class="head">
+    <label>所見の対象期間
+      <select id="diag-horizon"></select>
+    </label>
+    <span class="boj-next" id="boj-next"></span>
+  </div>
+  <div class="headline" id="diag-headline">—</div>
+  <div class="reason" id="diag-reason"></div>
+  <div class="facts" id="diag-facts"></div>
+  <ul class="context" id="diag-context"></ul>
+  <div class="alert" id="diag-alert"></div>
+</div>
+
+<div class="tables">
+  <section>
+    <h2>日次（市場）</h2>
+    <div class="scroll-x"><table id="daily-table"></table></div>
+  </section>
+  <section>
+    <h2>月次・四半期（公的統計）</h2>
+    <div class="scroll-x"><table id="monthly-table"></table></div>
+  </section>
+</div>
+
+<div class="controls" id="period-row">
+  <span class="pickers group">期間</span>
+</div>
+
+<div class="controls">
+  <label>表示
+    <select id="mode"></select>
+  </label>
+  <label><input type="checkbox" id="show-boj" checked> 日銀会合</label>
+  <label>開始日 <input type="date" id="from"></label>
+  <label>終了日 <input type="date" id="to"></label>
+  <span class="status" id="range-label"></span>
+  <span class="status">グラフ上を左ドラッグするとその区間を選べる（ダブルクリックで戻す）</span>
+</div>
+
+<div class="pickers" id="pick-daily"></div>
+<div class="pickers" id="pick-monthly"></div>
+
+<div class="readout" id="readout">グラフ上にカーソルを置くとその日の値が出る</div>
+<div class="chart-notes" id="chart-notes"></div>
+<div id="chart"></div>
+
+<footer>
+  <p><strong>出典</strong>（いずれも各機関の公表値。加工はこのサイトが行っている）</p>
+  <ul id="sources"></ul>
+  <p id="generated"></p>
+  <p>データは GitHub Actions が1日2回取得して更新している。
+     コードとデータ: <a href="https://github.com/youzoom64/keizai-board">github.com/youzoom64/keizai-board</a>
+     ／ グラフ描画に <a href="https://github.com/leeoniya/uPlot">uPlot</a>（MIT）を同梱。</p>
+</footer>
+
+<script src="vendor/uplot.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
