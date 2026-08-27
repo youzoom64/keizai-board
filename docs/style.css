@@ -141,8 +141,8 @@ footer ul { padding-left: 18px; margin: 4px 0; }
   padding: 5px 8px; font-size: 12px; line-height: 1.5;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28); white-space: nowrap;
 }
-#w-chart .tip .when { color: var(--muted); margin-bottom: 2px; }
-#w-chart .tip .line { display: flex; align-items: center; gap: 6px; }
-#w-chart .tip .dot { width: 10px; height: 3px; border-radius: 2px; flex: none; }
-#w-chart .tip .who { flex: 1 1 auto; }
+#w-chart .tip { align-items: center; gap: 6px; }
+#w-chart .tip .dot { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+#w-chart .tip .who { font-weight: 700; }
 #w-chart .tip .val { font-variant-numeric: tabular-nums; font-weight: 700; }
+#w-chart .tip .when { color: var(--muted); }

@@ -571,12 +571,13 @@ boot();
 const W_PERIODS = [["1年", 366], ["3年", 1096], ["5年", 1827], ["10年", 3653], ["全期間", 0]];
 const W_DEFAULT_PERIOD = "5年";
 const W_DEFAULT_COUNTRIES = ["jp", "us", "de", "gb", "kr"];
-const W_STALE_MONTHS = 6;   // これ以上古い最新値は色を変えて断る
+const W_STALE_MONTHS = 6;
+const HIT_RADIUS = 26;  // カーソルと線がこの範囲内なら「その線に触れている」とみなす   // これ以上古い最新値は色を変えて断る
 
 const w = {
   meta: null, byCountry: {}, indicator: null,
   selected: new Set(W_DEFAULT_COUNTRIES), period: W_DEFAULT_PERIOD,
-  plot: null, plotted: [],
+  plot: null, plotted: [], tip: null, highlighted: undefined,
 };
 
 async function bootWorld() {
@@ -753,40 +754,66 @@ function drawWorld() {
 }
 
 function onWorldCursor(u) {
-  const i = u.cursor.idx;
   const out = $("w-readout");
-  if (i == null) {
-    out.textContent = "グラフ上にカーソルを置くとその時点の値が出る";
+  const idx = u.cursor.idx;
+  if (idx == null || u.cursor.top == null || u.cursor.top < 0) {
+    out.textContent = "グラフの線にカーソルを重ねると、その線の国名と値が出る";
     if (w.tip) w.tip.style.display = "none";
     return;
   }
   const meta = wIndicatorMeta();
-  const day = Math.round(u.data[0][i] / DAY);
+  const day = Math.round(u.data[0][idx] / DAY);
 
-  const found = [];
-  w.plotted.forEach((p) => {
-    let best = null, bestDay = -Infinity;
-    p.map.forEach((v, d) => { if (d <= day && d > bestDay) { bestDay = d; best = v; } });
-    if (best !== null) found.push({ c: p.c, value: best });
-  });
-  found.sort((a, b) => b.value - a.value);
+  // カーソルのY座標に一番近い線を1本だけ選ぶ。
+  // 全部並べても「どの線がどの国か」の答えにならない。
+  let hit = null, hitDist = Infinity;
+  for (let si = 1; si < u.series.length; si++) {
+    const value = u.data[si][idx];
+    if (value == null) continue;
+    // cursor.top は描画領域基準のCSSピクセル。valToPos も同じ基準で取る。
+    const y = u.valToPos(value, u.series[si].scale);
+    const dist = Math.abs(y - u.cursor.top);
+    if (dist < hitDist) { hitDist = dist; hit = { si, value, y }; }
+  }
 
-  const text = (f) => `${f.value.toFixed(meta.decimals)}${meta.unit}`;
-  out.textContent = `${iso(day)}　|　` +
-    found.map((f) => `${f.c.name} ${text(f)}`).join("　");
+  if (!hit || hitDist > HIT_RADIUS) {
+    out.textContent = "グラフの線にカーソルを重ねると、その線の国名と値が出る";
+    if (w.tip) w.tip.style.display = "none";
+    highlightWorld(null);
+    return;
+  }
 
-  // カーソルの位置に直接出す。値の大きい順に並べると線の並びと一致する。
+  const country = w.plotted[hit.si - 1].c;
+  const text = hit.value.toFixed(meta.decimals) + meta.unit;
+  out.textContent = `${country.name}　${text}　（${iso(day)}）`;
+  highlightWorld(hit.si);
+
   if (!w.tip) return;
-  w.tip.innerHTML = `<div class="when">${iso(day)}</div>` + found.map((f) =>
-    `<div class="line"><span class="dot" style="background:${f.c.color}"></span>` +
-    `<span class="who">${f.c.name}</span><span class="val">${text(f)}</span></div>`).join("");
-  w.tip.style.display = "block";
+  w.tip.innerHTML =
+    `<span class="dot" style="background:${country.color}"></span>` +
+    `<span class="who">${country.name}</span>` +
+    `<span class="val">${text}</span>` +
+    `<span class="when">${iso(day)}</span>`;
+  w.tip.style.display = "flex";
 
+  // 1行しかないので線を隠さない。カーソルの右上へ少しずらす。
   const box = w.tip.getBoundingClientRect();
-  const right = u.cursor.left + 16;
-  const flip = right + box.width > u.bbox.width / devicePixelRatio;
-  w.tip.style.left = (flip ? u.cursor.left - box.width - 16 : right) + "px";
-  w.tip.style.top = Math.max(0, u.cursor.top - box.height / 2) + "px";
+  const width = u.over.clientWidth;
+  const right = u.cursor.left + 14;
+  w.tip.style.left = (right + box.width > width ? u.cursor.left - box.width - 14 : right) + "px";
+  w.tip.style.top = Math.max(0, hit.y - box.height - 10) + "px";
+}
+
+function highlightWorld(seriesIndex) {
+  // 触っている線を太く、他を薄くする。どれを指しているか目でも分かるように。
+  if (!w.plot) return;
+  if (w.highlighted === seriesIndex) return;
+  w.highlighted = seriesIndex;
+  for (let si = 1; si < w.plot.series.length; si++) {
+    const on = seriesIndex === null || si === seriesIndex;
+    w.plot.setSeries(si, { width: on ? (si === seriesIndex ? 2.6 : 1.6) : 1.6 }, false);
+  }
+  w.plot.setSeries(seriesIndex, { focus: seriesIndex !== null });
 }
 
 bootWorld();
