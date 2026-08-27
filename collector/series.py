@@ -88,6 +88,30 @@ DAILY: list[Series] = [
     Series("wti", "WTI原油", "商品", "ドル", 2,
            ("yahoo", "CL=F"), ("fred", "DCOILWTICO"), DIFF_PCT, "#a1887f", CYCLE_DAILY, "",
            "輸入インフレの手掛かり", family="為替・株・商品"),
+    # 仮想通貨。ドル建てで取る。円建てにするとドル円の動きが混ざるため。
+    # 土日も動くので、他の日次系列より点が多い。
+    Series("btc", "ビットコイン", "仮想通貨", "ドル", 0,
+           ("yahoo", "BTC-USD"), None, DIFF_PCT, "#f7931a", CYCLE_DAILY, "",
+           "相場全体の方向を決める基準。金融引き締めに最も敏感",
+           family="仮想通貨"),
+    Series("eth", "イーサリアム", "仮想通貨", "ドル", 0,
+           ("yahoo", "ETH-USD"), None, DIFF_PCT, "#627eea", CYCLE_DAILY, "",
+           "時価総額2位", family="仮想通貨"),
+    Series("sol", "ソラナ", "仮想通貨", "ドル", 1,
+           ("yahoo", "SOL-USD"), None, DIFF_PCT, "#14f195", CYCLE_DAILY, "",
+           "高速チェーンの代表。リスク選好の強さが一番はっきり出る",
+           family="仮想通貨"),
+    Series("xrp", "リップル", "仮想通貨", "ドル", 3,
+           ("yahoo", "XRP-USD"), None, DIFF_PCT, "#b0bec5", CYCLE_DAILY, "",
+           "送金系の代表。国内で人気。訴訟や規制で単独に跳ねやすい",
+           family="仮想通貨"),
+    Series("bnb", "バイナンスコイン", "仮想通貨", "ドル", 1,
+           ("yahoo", "BNB-USD"), None, DIFF_PCT, "#f3ba2f", CYCLE_DAILY, "",
+           "取引所エコシステムの代表", family="仮想通貨"),
+    Series("doge", "ドージコイン", "仮想通貨", "ドル", 4,
+           ("yahoo", "DOGE-USD"), None, DIFF_PCT, "#ba68c8", CYCLE_DAILY, "",
+           "投機センチメントの目安。実需の裏付けが薄い分、過熱が出やすい",
+           family="仮想通貨"),
 ]
 
 # 統計ダッシュボードAPI(appId不要)。(source, 指標コード, 周期, 季調区分)
