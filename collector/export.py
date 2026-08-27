@@ -44,8 +44,19 @@ def _series_meta() -> list[dict]:
             "diff": s.diff_style, "note": s.note,
             "alwaysRaw": s.always_raw,
             "solid": s.solid,
+            "family": s.family,
         })
     return out
+
+
+def _families() -> list[dict]:
+    """チェックの折りたたみ見出し。SERIES の並び順をそのまま保つ。"""
+    order: list[str] = []
+    for series in SERIES:
+        if series.family not in order:
+            order.append(series.family)
+    return [{"name": fam, "ids": [s.id for s in SERIES if s.family == fam]}
+            for fam in order]
 
 
 def _row_json(row: dict) -> dict:
@@ -143,6 +154,7 @@ def export() -> dict:
         "generatedAt": date.today().isoformat(),
         "epoch": EPOCH.isoformat(),
         "series": _series_meta(),
+        "families": _families(),
         "dailyIds": [s.id for s in DAILY],
         "monthlyIds": [s.id for s in MONTHLY],
         "cycles": {"monthly": CYCLE_MONTHLY, "quarterly": CYCLE_QUARTERLY},

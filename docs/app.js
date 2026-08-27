@@ -18,7 +18,7 @@ const BOJ_LINE_LIMIT = 20; // 縦線がこれを超える期間では引かな�
 
 const state = {
   meta: null, series: null, board: null, boj: [],
-  byId: {}, selected: new Set(DEFAULT_SERIES),
+  byId: {}, selected: new Set(DEFAULT_SERIES), series_checks: {},
   mode: MODE_DELTA, period: DEFAULT_PERIOD,
   from: null, to: null, showBoj: true, plot: null, plotted: [],
 };
@@ -79,30 +79,54 @@ function buildControls() {
   horizon.addEventListener("change", renderDiagnosis);
   // 所見はCI側で1ヶ月ぶんを計算済み。他の期間はブラウザ側で出し直す。
 
-  buildPickers("pick-daily", "日次", state.meta.dailyIds);
-  buildPickers("pick-monthly", "月次", state.meta.monthlyIds);
+  buildFamilyPickers();
 }
 
-function buildPickers(hostId, title, ids) {
-  const host = $(hostId);
-  const head = document.createElement("span");
-  head.className = "group";
-  head.textContent = title;
-  host.appendChild(head);
-  ids.forEach((id) => {
-    const s = state.byId[id];
-    const l = document.createElement("label");
-    l.style.color = s.color;
-    l.title = s.note || s.label;
-    l.innerHTML = `<input type="checkbox" autocomplete="off" value="${id}"> ${s.short}`;
-    const box = l.querySelector("input");
-    box.checked = state.selected.has(id);
-    box.addEventListener("change", () => {
-      if (box.checked) state.selected.add(id); else state.selected.delete(id);
-      draw();
+function buildFamilyPickers() {
+  // 一列に並べると指数と前年比が混ざって読めないので、分類ごとに折りたたむ。
+  const host = $("pick-daily");
+  host.className = "families";
+  $("pick-monthly").remove();
+
+  state.meta.families.forEach((fam) => {
+    const box = document.createElement("details");
+    const head = document.createElement("summary");
+    const list = document.createElement("div");
+    list.className = "pickers";
+
+    fam.ids.forEach((id) => {
+      const s = state.byId[id];
+      if (!s) return;
+      const l = document.createElement("label");
+      l.style.color = s.color;
+      l.title = s.note || s.label;
+      l.innerHTML = `<input type="checkbox" autocomplete="off" value="${id}"> ${s.short}`;
+      const check = l.querySelector("input");
+      check.checked = state.selected.has(id);
+      check.addEventListener("change", () => {
+        if (check.checked) state.selected.add(id); else state.selected.delete(id);
+        updateFamilyCount(box, fam);
+        draw();
+      });
+      list.appendChild(l);
+      state.series_checks[id] = check;
     });
-    host.appendChild(l);
+
+    box.appendChild(head);
+    box.appendChild(list);
+    // 選んでいる系列が入っている分類は開いておく。それ以外は畳む。
+    box.open = fam.ids.some((id) => state.selected.has(id));
+    host.appendChild(box);
+    box._head = head;
+    updateFamilyCount(box, fam);
   });
+}
+
+function updateFamilyCount(box, fam) {
+  const on = fam.ids.filter((id) => state.selected.has(id)).length;
+  box._head.innerHTML = `<span class="fam-name">${fam.name}</span>` +
+    `<span class="fam-count">${on ? on + " 選択中" : fam.ids.length + " 件"}</span>`;
+  box.classList.toggle("has-on", on > 0);
 }
 
 /* ------------------------------------------------------------------ 期間 */
