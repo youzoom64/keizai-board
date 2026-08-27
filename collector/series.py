@@ -87,7 +87,16 @@ DAILY: list[Series] = [
            family="為替・株・商品"),
     Series("wti", "WTI原油", "商品", "ドル", 2,
            ("yahoo", "CL=F"), ("fred", "DCOILWTICO"), DIFF_PCT, "#a1887f", CYCLE_DAILY, "",
-           "輸入インフレの手掛かり", family="為替・株・商品"),
+           "輸入インフレの入口。全産業のコストに効く", family="資源"),
+    Series("gold", "金", "商品", "ドル", 1,
+           ("yahoo", "GC=F"), None, DIFF_PCT, "#ffc400", CYCLE_DAILY, "",
+           "工業需要はわずかで、実質金利と通貨への信認で動く。"
+           "利息を生まないので金利が上がると売られやすい。債券の代わりとして見る",
+           family="資源"),
+    Series("copper", "銅", "商品", "ドル", 2,
+           ("yahoo", "HG=F"), None, DIFF_PCT, "#b87333", CYCLE_DAILY, "",
+           "建設・電線・EVの実需で動く。世界の景気の体温計として使われる",
+           family="資源"),
     # 仮想通貨。ドル建てで取る。円建てにするとドル円の動きが混ざるため。
     # 土日も動くので、他の日次系列より点が多い。
     Series("btc", "ビットコイン", "仮想通貨", "ドル", 0,
