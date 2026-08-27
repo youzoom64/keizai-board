@@ -89,9 +89,12 @@ td.hot { background: var(--alert-bg); color: var(--alert-fg); font-weight: 700; 
 /* ---- グラフ ---- */
 .controls { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 6px; }
 .controls label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.pickers { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px; }
-.pickers .group { color: var(--muted); align-self: center; }
-.pickers label { font-weight: 700; white-space: nowrap; }
+.pickers { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 8px; }
+.pickers .group { color: var(--muted); }
+/* 中身をベースラインで並べると、文字の高さでチェック枠の位置がずれる。 */
+.pickers label { display: inline-flex; align-items: center; gap: 4px;
+                 font-weight: 700; white-space: nowrap; }
+.pickers input[type=checkbox] { margin: 0; flex: none; }
 select, input[type=date] {
   font: inherit; padding: 3px 6px; border-radius: 5px;
   background: var(--panel); color: var(--text); border: 1px solid var(--border);
