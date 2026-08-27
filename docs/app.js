@@ -13,6 +13,31 @@ const MODE_INDEX = "開始日を100とした指数";
 const MODE_RAW = "実数（そのままの値）";
 const MODES = [MODE_DELTA, MODE_INDEX, MODE_RAW];
 const DEFAULT_SERIES = ["jgb10y", "jgb2y", "usdjpy"];
+
+/* よく見る組み合わせ。42系列から選ばせるのではなく「何を知りたいか」で選ばせる。 */
+const PRESETS = [
+  { name: "金利と為替", mode: MODE_DELTA,
+    ids: ["jgb2y", "jgb10y", "jgb30y", "usdjpy"],
+    note: "年限ごとの金利と円の動き。長期金利が動いた原因を絞る基本の組み合わせ" },
+  { name: "物価の伝わり方", mode: MODE_RAW,
+    ids: ["import_price_index", "cgpi_index", "cpi_core_index"],
+    note: "輸入→企業間→消費者。川上の値上がりが川下にどこまで降りてきたか" },
+  { name: "円安のぶん", mode: MODE_RAW,
+    ids: ["import_price_index", "import_price_ccy_index"],
+    note: "輸入物価の円建と契約通貨建。差が円安由来の値上がり" },
+  { name: "雇用と賃金", mode: MODE_RAW,
+    ids: ["unemployment", "jobs_ratio", "wage_real", "wage_nominal"],
+    note: "働き口と給料。人手不足なのに賃金が上がっているか" },
+  { name: "日米比較", mode: MODE_DELTA,
+    ids: ["jgb10y", "ust10y", "usdjpy"],
+    note: "日米の長期金利と円。世界的な金利上昇か日本固有かを見る" },
+  { name: "景気", mode: MODE_RAW,
+    ids: ["gdp_nominal", "gdp_real_amount"],
+    note: "名目と実質のGDP。開きが物価のぶん" },
+  { name: "資源と株", mode: MODE_INDEX,
+    ids: ["wti", "gold", "copper", "nikkei225"],
+    note: "原油・金・銅と日経平均。実体と金融の温度差" },
+];
 const FLATTEN_RATIO = 5;   // 同じ軸で値幅がこの倍率を超えたら小さい方は平らに見える
 const BOJ_LINE_LIMIT = 20; // 縦線がこれを超える期間では引かない
 
@@ -107,6 +132,7 @@ async function boot() {
   }
   renderDiagnosis();
   renderTables();
+  markSelectedRows();
   renderFooter();
 
   if (saved && saved.period === null && saved.from && saved.to) {
@@ -148,6 +174,7 @@ function buildControls() {
   horizon.addEventListener("change", () => { renderDiagnosis(); save(); });
   // 所見はCI側で1ヶ月ぶんを計算済み。他の期間はブラウザ側で出し直す。
 
+  buildPresets();
   buildFamilyPickers();
 }
 
@@ -190,6 +217,7 @@ function buildFamilyPickers() {
       check.addEventListener("change", () => {
         if (check.checked) state.selected.add(id); else state.selected.delete(id);
         updateFamilyCount(box, fam);
+        markSelectedRows();
         draw();
         save();
       });
@@ -208,6 +236,61 @@ function buildFamilyPickers() {
     box._head = head;
     state.familyBoxes.push({ box, fam });
     updateFamilyCount(box, fam);
+  });
+}
+
+/* 表のクリックとプリセットから呼ぶ、選択の唯一の入口。 */
+function setSelection(ids, mode) {
+  state.selected = new Set(ids.filter((id) => state.byId[id]));
+  Object.entries(state.series_checks).forEach(([id, check]) => {
+    check.checked = state.selected.has(id);
+  });
+  (state.familyBoxes || []).forEach((f) => {
+    updateFamilyCount(f.box, f.fam);
+    // 選んだ系列が入っている分類は開いて、どこにあるか分かるようにする
+    if (f.fam.ids.some((id) => state.selected.has(id))) f.box.open = true;
+  });
+  if (mode && MODES.includes(mode)) {
+    state.mode = mode;
+    $("mode").value = mode;
+  }
+  markSelectedRows();
+  draw();
+  save();
+}
+
+function toggleSeries(id) {
+  if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+  const check = state.series_checks[id];
+  if (check) check.checked = state.selected.has(id);
+  (state.familyBoxes || []).forEach((f) => updateFamilyCount(f.box, f.fam));
+  markSelectedRows();
+  draw();
+  save();
+}
+
+/* 表のどの行が今グラフに出ているかを示す。 */
+function markSelectedRows() {
+  document.querySelectorAll("tbody tr[data-id]").forEach((tr) => {
+    tr.classList.toggle("on", state.selected.has(tr.dataset.id));
+  });
+}
+
+function buildPresets() {
+  const host = $("presets");
+  if (!host) return;
+  const label = document.createElement("span");
+  label.className = "group";
+  label.textContent = "よく見る組み合わせ";
+  host.appendChild(label);
+  PRESETS.forEach((preset) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "preset";
+    btn.textContent = preset.name;
+    btn.title = preset.note;
+    btn.addEventListener("click", () => setSelection(preset.ids, preset.mode));
+    host.appendChild(btn);
   });
 }
 
@@ -581,6 +664,10 @@ function fillTable(table, rows, heads, withSigma, altHeads) {
   rows.forEach((r) => {
     const meta = state.byId[r.id];
     const tr = body.insertRow();
+    // 数字を見て「推移は？」と思った時に、その行を押せばグラフに出る。
+    tr.dataset.id = r.id;
+    tr.title = "クリックでグラフに出す／外す";
+    tr.addEventListener("click", () => toggleSeries(r.id));
     const name = tr.insertCell();
     name.className = "name";
     name.style.color = meta.color;
