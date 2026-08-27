@@ -19,18 +19,25 @@ const PRESETS = [
   { name: "金利と為替", mode: MODE_DELTA,
     ids: ["jgb2y", "jgb10y", "jgb30y", "usdjpy"],
     note: "年限ごとの金利と円の動き。長期金利が動いた原因を絞る基本の組み合わせ" },
+  { name: "インフレ率", mode: MODE_RAW,
+    ids: ["cpi_core", "cpi_all", "cpi_core_core"],
+    note: "消費者物価の前年同月比。コア（生鮮食品を除く）が日銀の見る数字" },
   { name: "物価の伝わり方", mode: MODE_RAW,
     ids: ["import_price_index", "cgpi_index", "cpi_core_index"],
     note: "輸入→企業間→消費者。川上の値上がりが川下にどこまで降りてきたか" },
   { name: "円安のぶん", mode: MODE_RAW,
     ids: ["import_price_index", "import_price_ccy_index"],
     note: "輸入物価の円建と契約通貨建。差が円安由来の値上がり" },
+  { name: "失業率", mode: MODE_RAW,
+    ids: ["unemployment", "jobs_ratio"],
+    note: "完全失業率と有効求人倍率。働き口が余っているか足りないか" },
   { name: "雇用と賃金", mode: MODE_RAW,
     ids: ["unemployment", "jobs_ratio", "wage_real", "wage_nominal"],
     note: "働き口と給料。人手不足なのに賃金が上がっているか" },
-  { name: "日米比較", mode: MODE_DELTA,
+  { name: "日米金利差", mode: MODE_DELTA,
     ids: ["jgb10y", "ust10y", "usdjpy"],
-    note: "日米の長期金利と円。世界的な金利上昇か日本固有かを見る" },
+    note: "日米の長期金利と円。差が開くほど円が売られやすい。"
+          + "世界的な金利上昇か日本固有かもここで分かる" },
   { name: "景気", mode: MODE_RAW,
     ids: ["gdp_nominal", "gdp_real_amount"],
     note: "名目と実質のGDP。開きが物価のぶん" },
@@ -185,6 +192,11 @@ function buildFamilyPickers() {
   $("pick-monthly").remove();
   state.familyBoxes = [];
 
+  const head0 = document.createElement("span");
+  head0.className = "picker-head";
+  head0.textContent = "細かく選ぶ";
+  host.appendChild(head0);
+
   const clearAll = document.createElement("button");
   clearAll.type = "button";
   clearAll.className = "clear-all";
@@ -227,10 +239,9 @@ function buildFamilyPickers() {
 
     box.appendChild(head);
     box.appendChild(list);
-    // 選んでいる系列が入っている分類は開いておく。それ以外は畳む。
-    box.open = state.savedOpen
-      ? state.savedOpen.includes(fam.name)
-      : fam.ids.some((id) => state.selected.has(id));
+    // 既定は全部畳む。選ぶ入口はプリセットと表の行で、ここは細かく詰めたい人の場所。
+    // 一部だけ開いていると「開いている分類が全部」に見えて、畳まれた系列が無いことにされる。
+    box.open = state.savedOpen ? state.savedOpen.includes(fam.name) : false;
     box.addEventListener("toggle", save);
     host.appendChild(box);
     box._head = head;
@@ -267,6 +278,16 @@ function toggleSeries(id) {
   markSelectedRows();
   draw();
   save();
+}
+
+/* 表はグラフより下にある。行を押した結果が画面の外だと、押しても何も起きていない
+   ように見える。グラフが見えていない時だけ引き戻す。 */
+function revealChart() {
+  const el = $("chart");
+  if (!el) return;
+  const box = el.getBoundingClientRect();
+  if (box.bottom > 0 && box.top < window.innerHeight * 0.6) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /* 表のどの行が今グラフに出ているかを示す。 */
@@ -667,7 +688,7 @@ function fillTable(table, rows, heads, withSigma, altHeads) {
     // 数字を見て「推移は？」と思った時に、その行を押せばグラフに出る。
     tr.dataset.id = r.id;
     tr.title = "クリックでグラフに出す／外す";
-    tr.addEventListener("click", () => toggleSeries(r.id));
+    tr.addEventListener("click", () => { toggleSeries(r.id); revealChart(); });
     const name = tr.insertCell();
     name.className = "name";
     name.style.color = meta.color;

@@ -192,3 +192,22 @@ footer ul { padding-left: 18px; margin: 4px 0; }
 #chart .tip .who { font-weight: 700; }
 #chart .tip .val { font-variant-numeric: tabular-nums; font-weight: 700; }
 #chart .tip .when { color: var(--muted); }
+
+/* よく見る組み合わせ。42系列から選ばせず「何を知りたいか」で選ばせる入口。 */
+#presets { gap: 6px; margin-bottom: 10px; }
+.preset {
+  padding: 4px 12px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; color: var(--muted);
+}
+.preset:hover { color: var(--accent); border-color: var(--accent); }
+#presets .group { color: var(--muted); margin-right: 2px; }
+
+/* 折りたたみは既定で畳んである。何のための場所かを見出しで言う。 */
+.families .picker-head { align-self: center; color: var(--muted); font-size: 13px; }
+
+/* 表の行を押すとグラフに出る。押せることと、今出ていることを見た目で示す。
+   背景は tr に置く。td に置くと異常度の色(td.hot)を塗りつぶしてしまう。 */
+tbody tr[data-id] { cursor: pointer; }
+tbody tr[data-id]:hover { background: var(--panel); }
+tbody tr[data-id].on { background: var(--panel); }
+tbody tr[data-id].on td.name { box-shadow: inset 3px 0 0 var(--accent); }

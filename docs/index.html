@@ -7,7 +7,7 @@
 <meta name="description" content="日本の長期金利・為替・株価と、消費者物価・企業物価・賃金・雇用・GDPを1画面に並べ、金利が動いた原因の当たりを付けるための盤面。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="vendor/uplot.min.css">
-<link rel="stylesheet" href="style.css?v=2942875e">
+<link rel="stylesheet" href="style.css?v=e25cea4b">
 </head>
 <body>
 
@@ -33,16 +33,7 @@
   <div class="alert" id="diag-alert"></div>
 </div>
 
-<div class="tables">
-  <section>
-    <h2>日次（市場）</h2>
-    <div class="scroll-x"><table id="daily-table"></table></div>
-  </section>
-  <section>
-    <h2>月次・四半期（公的統計）</h2>
-    <div class="scroll-x"><table id="monthly-table"></table></div>
-  </section>
-</div>
+<div class="controls" id="presets"></div>
 
 <div class="controls" id="period-row">
   <span class="pickers group">期間</span>
@@ -59,13 +50,23 @@
   <span class="status">グラフ上を左ドラッグするとその区間を選べる（ダブルクリックで戻す）</span>
 </div>
 
-<div class="controls" id="presets"></div>
-<div id="pick-daily"></div>
-<div class="pickers" id="pick-monthly"></div>
-
 <div class="readout" id="readout">グラフ上にカーソルを置くとその日の値が出る</div>
 <div class="chart-notes" id="chart-notes"></div>
 <div id="chart"></div>
+
+<div id="pick-daily"></div>
+<div class="pickers" id="pick-monthly"></div>
+
+<div class="tables">
+  <section>
+    <h2>日次（市場）</h2>
+    <div class="scroll-x"><table id="daily-table"></table></div>
+  </section>
+  <section>
+    <h2>月次・四半期（公的統計）</h2>
+    <div class="scroll-x"><table id="monthly-table"></table></div>
+  </section>
+</div>
 
 <section id="world">
   <h2 class="world-head">他国比較</h2>
@@ -88,6 +89,6 @@
 </footer>
 
 <script src="vendor/uplot.min.js"></script>
-<script src="app.js?v=2942875e"></script>
+<script src="app.js?v=e25cea4b"></script>
 </body>
 </html>
