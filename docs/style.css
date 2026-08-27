@@ -110,3 +110,19 @@ footer ul { padding-left: 18px; margin: 4px 0; }
 /* uPlot の配色をテーマに合わせる */
 .uplot, .u-title, .u-legend { color: var(--text); font-family: inherit; }
 .u-select { background: rgba(120, 140, 200, 0.18); }
+
+/* ---- 他国比較。日本のブロックとは独立して効かせる ---- */
+#world { margin-top: 28px; border-top: 2px solid var(--border); padding-top: 14px; }
+.world-head { font-size: 16px; color: var(--text); font-weight: 700; margin-bottom: 8px; }
+#w-chart { min-height: 320px; }
+
+.w-rank { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 10px; }
+.w-rank .row { display: grid; grid-template-columns: 9em 1fr 12em; align-items: center; gap: 8px; }
+.w-rank .label { white-space: nowrap; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.w-rank .track { background: var(--panel); border-radius: 3px; height: 18px;
+                 overflow: hidden; min-width: 0; }
+.w-rank .fill { display: block; height: 100%; border-radius: 3px; min-width: 2px; }
+.w-rank .num { text-align: right; font-variant-numeric: tabular-nums;
+               font-weight: 700; white-space: nowrap; }
+.w-rank .when { color: var(--muted); font-size: 11px; margin-left: 4px; font-weight: 400; }
+.w-rank .row.stale .num { color: var(--stale); }

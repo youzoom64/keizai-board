@@ -562,3 +562,204 @@ function renderFooter() {
 }
 
 boot();
+
+/* ==================================================================
+   他国比較。日本のブロックとは独立して動く。
+   指標を1つ選んで国を並べるので、単位が揃い変換モードが要らない。
+   ================================================================== */
+
+const W_PERIODS = [["1年", 366], ["3年", 1096], ["5年", 1827], ["10年", 3653], ["全期間", 0]];
+const W_DEFAULT_PERIOD = "5年";
+const W_DEFAULT_COUNTRIES = ["jp", "us", "de", "gb", "kr"];
+const W_STALE_MONTHS = 6;   // これ以上古い最新値は色を変えて断る
+
+const w = {
+  meta: null, byCountry: {}, indicator: null,
+  selected: new Set(W_DEFAULT_COUNTRIES), period: W_DEFAULT_PERIOD,
+  plot: null, plotted: [],
+};
+
+async function bootWorld() {
+  try {
+    w.meta = await fetch("data/world.json", { cache: "no-cache" }).then((r) => {
+      if (!r.ok) throw new Error(`world.json が読めない (${r.status})`);
+      return r.json();
+    });
+  } catch (err) {
+    $("w-note").textContent = "他国比較の読み込みに失敗: " + err.message;
+    return;
+  }
+  w.meta.countries.forEach((c) => { w.byCountry[c.key] = c; });
+  w.indicator = w.meta.indicators[0].key;
+
+  buildWorldControls();
+  drawWorld();
+}
+
+function buildWorldControls() {
+  const ind = $("w-indicators");
+  w.meta.indicators.forEach((i) => {
+    const l = document.createElement("label");
+    l.title = i.note || "";
+    l.innerHTML = `<input type="radio" name="w-ind" autocomplete="off" value="${i.key}"> ${i.name}`;
+    const r = l.querySelector("input");
+    r.checked = i.key === w.indicator;
+    r.addEventListener("change", () => {
+      if (r.checked) { w.indicator = i.key; drawWorld(); }
+    });
+    ind.appendChild(l);
+  });
+
+  const host = $("w-countries");
+  w.meta.countries.forEach((c) => {
+    const l = document.createElement("label");
+    l.style.color = c.color;
+    l.innerHTML = `<input type="checkbox" autocomplete="off" value="${c.key}"> ${c.name}`;
+    const box = l.querySelector("input");
+    box.checked = w.selected.has(c.key);
+    box.addEventListener("change", () => {
+      if (box.checked) w.selected.add(c.key); else w.selected.delete(c.key);
+      drawWorld();
+    });
+    host.appendChild(l);
+  });
+
+  const per = $("w-periods");
+  W_PERIODS.forEach(([label]) => {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="radio" name="w-period" autocomplete="off" value="${label}"> ${label}`;
+    const r = l.querySelector("input");
+    r.checked = label === w.period;
+    r.addEventListener("change", () => {
+      if (r.checked) { w.period = label; drawWorld(); }
+    });
+    per.appendChild(l);
+  });
+}
+
+function wIndicatorMeta() {
+  return w.meta.indicators.find((i) => i.key === w.indicator);
+}
+
+function wSeries(countryKey) {
+  const per = w.meta.series[w.indicator] || {};
+  return per[countryKey] || null;
+}
+
+function wWindow(series) {
+  const days = W_PERIODS.find(([l]) => l === w.period)[1];
+  if (!days || !series.d.length) return series;
+  const last = dayOf(series.d[series.d.length - 1]);
+  const d = [], v = [];
+  for (let i = 0; i < series.d.length; i++) {
+    if (dayOf(series.d[i]) >= last - days) { d.push(series.d[i]); v.push(series.v[i]); }
+  }
+  return { d, v };
+}
+
+function wMonthsBehind(iso) {
+  const a = new Date(iso), b = new Date();
+  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
+}
+
+function drawWorld() {
+  const meta = wIndicatorMeta();
+  $("w-note").textContent = meta.note || "";
+
+  // 上段：最新値の順位。国が多くても読めるので、選択に関わらず全部出す。
+  const rows = [];
+  w.meta.countries.forEach((c) => {
+    const s = wSeries(c.key);
+    if (!s || !s.v.length) return;
+    rows.push({ c, value: s.v[s.v.length - 1], when: s.d[s.d.length - 1] });
+  });
+  rows.sort((a, b) => b.value - a.value);
+
+  const rank = $("w-rank");
+  rank.innerHTML = "";
+  const max = rows.length ? Math.max(...rows.map((r) => Math.abs(r.value))) : 1;
+  rows.forEach((r) => {
+    const behind = wMonthsBehind(r.when);
+    const div = document.createElement("div");
+    div.className = "row" + (behind >= W_STALE_MONTHS ? " stale" : "");
+    div.innerHTML =
+      `<span class="label" style="color:${r.c.color}">${r.c.name}</span>` +
+      `<span class="track"><span class="fill" style="width:${Math.abs(r.value) / max * 100}%;` +
+      `background:${r.c.color}"></span></span>` +
+      `<span class="num">${r.value.toFixed(meta.decimals)}${meta.unit}` +
+      `<span class="when">${r.when.slice(0, 7)}</span></span>`;
+    div.title = `${r.c.name} ${r.when} 時点`;
+    rank.appendChild(div);
+  });
+
+  // 下段：推移
+  const host = $("w-chart");
+  if (w.plot) { w.plot.destroy(); w.plot = null; }
+  host.innerHTML = "";
+  w.plotted = [];
+
+  const chosen = [...w.selected].map((k) => w.byCountry[k]).filter(Boolean);
+  const daySet = new Set();
+  const prepared = [];
+  chosen.forEach((c) => {
+    const s = wSeries(c.key);
+    if (!s) return;
+    const win = wWindow(s);
+    if (win.d.length < 2) return;
+    const map = new Map();
+    win.d.forEach((iso, i) => { const n = dayOf(iso); daySet.add(n); map.set(n, win.v[i]); });
+    prepared.push({ c, map });
+  });
+  if (!prepared.length) {
+    host.innerHTML = '<p class="status">国を選ぶとグラフが出る</p>';
+    return;
+  }
+
+  const days = [...daySet].sort((a, b) => a - b);
+  const data = [days.map((d) => d * DAY)];
+  const uSeries = [{}];
+  prepared.forEach((p) => {
+    data.push(days.map((d) => (p.map.has(d) ? p.map.get(d) : null)));
+    uSeries.push({ label: p.c.name, stroke: p.c.color, width: 1.6, spanGaps: true });
+    w.plotted.push(p);
+  });
+
+  const css = getComputedStyle(document.body);
+  const grid = { stroke: css.getPropertyValue("--grid").trim(), width: 1 };
+  const axisColor = css.getPropertyValue("--muted").trim();
+
+  w.plot = new uPlot({
+    width: host.clientWidth || 900,
+    height: Math.max(320, Math.round(window.innerHeight * 0.34)),
+    series: uSeries,
+    axes: [{ stroke: axisColor, grid, ticks: grid },
+           { stroke: axisColor, grid, ticks: grid, label: `${meta.name}（${meta.unit}）` }],
+    scales: { x: { time: true } },
+    legend: { show: false },
+    cursor: { focus: { prox: 24 } },
+    hooks: { setCursor: [onWorldCursor] },
+  }, data, host);
+
+  window.addEventListener("resize", () => {
+    if (w.plot) w.plot.setSize({ width: host.clientWidth, height: w.plot.height });
+  }, { once: true });
+}
+
+function onWorldCursor(u) {
+  const i = u.cursor.idx;
+  const out = $("w-readout");
+  if (i == null) { out.textContent = "グラフ上にカーソルを置くとその時点の値が出る"; return; }
+  const meta = wIndicatorMeta();
+  const day = Math.round(u.data[0][i] / DAY);
+  const parts = [];
+  w.plotted.forEach((p) => {
+    let best = null, bestDay = -Infinity;
+    p.map.forEach((v, d) => { if (d <= day && d > bestDay) { bestDay = d; best = v; } });
+    if (best !== null) {
+      parts.push(`${p.c.name} ${best.toFixed(meta.decimals)}${meta.unit}`);
+    }
+  });
+  out.textContent = `${iso(day)}　|　${parts.join("　")}`;
+}
+
+bootWorld();

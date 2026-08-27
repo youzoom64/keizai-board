@@ -9,7 +9,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from . import analyze, boj, collect as collect_mod, store
+from . import analyze, boj, collect as collect_mod, store, world
 from .series import CYCLE_MONTHLY, CYCLE_QUARTERLY, DAILY, MONTHLY, SERIES
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
@@ -126,6 +126,17 @@ def export() -> dict:
         path.write_text(json.dumps(payload, ensure_ascii=False,
                                    separators=(",", ":")), encoding="utf-8")
         written[name] = path.stat().st_size
+
+    # 他国比較。日本の盤面とは別ファイルにして、既存の読み込みに影響させない。
+    try:
+        world_payload = world.payload(world.collect_world())
+        path = OUT / "world.json"
+        path.write_text(json.dumps(world_payload, ensure_ascii=False,
+                                   separators=(",", ":")), encoding="utf-8")
+        written["world.json"] = path.stat().st_size
+    except Exception as exc:
+        # 他国が取れなくても日本の盤面は出す。
+        print("警告: 他国比較の取得に失敗 {}: {}".format(type(exc).__name__, exc))
 
     md = analyze.board_text(rows, diag, mrows)
     (OUT / "board.md").write_text(md, encoding="utf-8")
