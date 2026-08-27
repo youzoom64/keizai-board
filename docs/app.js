@@ -53,6 +53,7 @@ const state = {
   byId: {}, selected: new Set(DEFAULT_SERIES), series_checks: {},
   mode: MODE_DELTA, period: DEFAULT_PERIOD,
   from: null, to: null, showBoj: true, plot: null, plotted: [],
+  highlighted: undefined,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -422,6 +423,7 @@ function draw() {
   if (!chosen.length) {
     host.innerHTML = '<p class="status">系列を選ぶとグラフが出る</p>';
     $("chart-notes").textContent = "";
+    renderNowShowing();
     return;
   }
 
@@ -437,11 +439,13 @@ function draw() {
     const rawMap = new Map();
     t.forEach((d, i) => rawMap.set(d, v[i]));
     t.forEach((d) => daySet.add(d));
-    prepared.push({ meta, map, rawMap, unit, span: Math.max(...ys) - Math.min(...ys), n: t.length });
+    prepared.push({ meta, map, rawMap, unit, span: Math.max(...ys) - Math.min(...ys),
+                    n: t.length, lastDay: t[t.length - 1], lastRaw: v[v.length - 1] });
   });
   if (!prepared.length) {
     host.innerHTML = '<p class="status">この期間にデータが無い</p>';
     $("chart-notes").textContent = "";
+    renderNowShowing();
     return;
   }
 
@@ -504,6 +508,8 @@ function draw() {
   state.plot = new uPlot(opts, data, host);
   host.ondblclick = () => setPeriod(state.period || DEFAULT_PERIOD);
 
+  state.highlighted = undefined;
+  renderNowShowing();
   $("chart-notes").textContent = buildNotes(extraUnits).join("　※");
   window.onresize = () => {
     if (state.plot) state.plot.setSize({ width: host.clientWidth, height: state.plot.height });
@@ -567,6 +573,64 @@ function drawBojLines(u) {
   ctx.restore();
 }
 
+/* グラフのすぐ上に、今出ている線をそのままの色と線種で並べる。
+   凡例と、選んでいる状態の表示と、外す操作を1つにまとめる。
+   チェックはグラフの下の折りたたみの中にあって、結果と離れすぎていた。 */
+function renderNowShowing() {
+  const host = $("now-showing");
+  if (!host) return;
+  host.innerHTML = "";
+
+  const label = document.createElement("span");
+  label.className = "group";
+  label.textContent = "今出ている線";
+  host.appendChild(label);
+
+  if (!state.plotted.length) {
+    const none = document.createElement("span");
+    none.className = "empty";
+    none.textContent = "なし（下の表の行か、上の組み合わせを押すと出る）";
+    host.appendChild(none);
+    return;
+  }
+
+  state.plotted.forEach((p, i) => {
+    const si = i + 1;                       // uPlot の系列番号。0はx軸
+    const dashed = !(p.meta.cycle === "D" || p.meta.solid);
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.style.setProperty("--c", p.meta.color);
+    // 月次は最新でも数ヶ月前になる。いつ時点の値かはここで言う。
+    chip.title = `${iso(p.lastDay)} 時点${p.meta.note ? "　" + p.meta.note : ""}`;
+    chip.innerHTML =
+      `<span class="line${dashed ? " dashed" : ""}"></span>` +
+      `<span class="who">${p.meta.label}</span>` +
+      `<span class="val">${fmtValue(p.meta, p.lastRaw)}</span>` +
+      (p.scale === "R" ? `<span class="axis">右軸</span>` : "") +
+      `<button type="button" class="cut" title="この線を外す">×</button>`;
+
+    // 触れている間だけ、その線を太くする。線が重なっていても1本だけ浮く。
+    chip.addEventListener("mouseenter", () => highlightChart(si));
+    chip.addEventListener("mouseleave", () => highlightChart(null));
+    chip.querySelector(".cut").addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSeries(p.meta.id);
+    });
+    host.appendChild(chip);
+  });
+}
+
+/* 触っている線を太くする。他国比較の highlightWorld と同じ流儀。 */
+function highlightChart(seriesIndex) {
+  if (!state.plot) return;
+  if (state.highlighted === seriesIndex) return;
+  state.highlighted = seriesIndex;
+  for (let si = 1; si < state.plot.series.length; si++) {
+    state.plot.setSeries(si, { width: si === seriesIndex ? 3.2 : 1.6 }, false);
+  }
+  state.plot.setSeries(seriesIndex, { focus: seriesIndex !== null });
+}
+
 /* ------------------------------------------------------------------ カーソル */
 function onCursor(u) {
   const i = u.cursor.idx;
@@ -587,11 +651,16 @@ function onCursor(u) {
   }
 
   // 読み取り行は選んだ全系列。吹き出しは触れている1本だけ。
+  // 名前を系列色にして線見本を付ける。色と名前が結び付いていないと、
+  // 値が出ていてもどの線のものか分からない。
   const parts = state.plotted.map((p) => {
     const v = nearestRaw(p, day);
-    return v === null ? null : `${p.meta.label} ${fmtValue(p.meta, v)}`;
+    if (v === null) return null;
+    return `<span class="rd"><span class="dot" style="background:${p.meta.color}"></span>` +
+           `<span class="who" style="color:${p.meta.color}">${p.meta.label}</span>` +
+           `<span class="val">${fmtValue(p.meta, v)}</span></span>`;
   }).filter(Boolean);
-  out.textContent = `${iso(day)}　|　${parts.join("　")}`;
+  out.innerHTML = `<span class="when">${iso(day)}</span>` + parts.join("");
 
   const hit = nearestSeries(u, i);
   if (!hit) { hideTip(state.tip); return; }

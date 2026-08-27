@@ -211,3 +211,31 @@ tbody tr[data-id] { cursor: pointer; }
 tbody tr[data-id]:hover { background: var(--panel); }
 tbody tr[data-id].on { background: var(--panel); }
 tbody tr[data-id].on td.name { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* 今グラフに出ている線。凡例と、選んでいる状態と、外す操作を1つにまとめる。 */
+.now-showing { gap: 6px; margin: 2px 0 6px; }
+.now-showing .group { color: var(--muted); }
+.now-showing .empty { color: var(--muted); font-size: 13px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 3px 2px 9px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel);
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.chip:hover { border-color: var(--c); }
+/* 線見本はグラフと同じ色・同じ線種にする。色が近い系列は線種で見分けている。 */
+.chip .line { width: 20px; height: 0; border-top: 3px solid var(--c); flex: none; }
+.chip .line.dashed { border-top-style: dashed; }
+.chip .who { font-weight: 700; color: var(--c); }
+.chip .axis { color: var(--muted); font-size: 11px; }
+.chip .cut {
+  border: 0; background: none; color: var(--muted);
+  padding: 1px 7px; border-radius: 999px; line-height: 1.4;
+}
+.chip .cut:hover { color: var(--up); background: var(--bg); }
+
+/* 読み取り行。カーソルを置いている間の凡例も兼ねる。 */
+.readout .when { color: var(--muted); margin-right: 12px; }
+.readout .rd { display: inline-flex; align-items: center; gap: 5px; margin-right: 14px; }
+.readout .rd .dot { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+.readout .rd .who { font-weight: 700; }
