@@ -5,7 +5,9 @@ GitHub Pages では Python が動かないので、取得と計算はここ（CI
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -62,6 +64,35 @@ def _row_json(row: dict) -> dict:
         "staleDays": row.get("stale_days"),
         "monthsBehind": row.get("months_behind"),
     }
+
+
+def stamp_assets() -> str:
+    """app.js と style.css のURLに中身のハッシュを付ける。
+
+    付けないと、更新してもブラウザが古いJSを掴んだままになる。
+    中身が変わった時だけURLが変わるので、無駄な再取得も起きない。
+    """
+    index = DOCS / "index.html"
+    html = index.read_text(encoding="utf-8")
+    digest = hashlib.sha1()
+    for name in ("app.js", "style.css"):
+        digest.update((DOCS / name).read_bytes())
+    version = digest.hexdigest()[:8]
+
+    # 既に版が付いていれば剥がしてから付け直す。正規表現は使わない。
+    for name, before, after in (
+        ("style.css", '<link rel="stylesheet" href="', '">'),
+        ("app.js", '<script src="', '"></script>'),
+    ):
+        for old in (name, "{}?v=".format(name)):
+            i = html.find(before + old)
+            if i < 0:
+                continue
+            j = html.index(after, i)
+            html = html[:i] + before + name + "?v=" + version + html[j:]
+            break
+    index.write_text(html, encoding="utf-8")
+    return version
 
 
 def export() -> dict:
@@ -137,6 +168,8 @@ def export() -> dict:
     except Exception as exc:
         # 他国が取れなくても日本の盤面は出す。
         print("警告: 他国比較の取得に失敗 {}: {}".format(type(exc).__name__, exc))
+
+    written["index.html(版)"] = stamp_assets()
 
     md = analyze.board_text(rows, diag, mrows)
     (OUT / "board.md").write_text(md, encoding="utf-8")

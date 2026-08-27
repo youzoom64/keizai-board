@@ -728,6 +728,12 @@ function drawWorld() {
   const grid = { stroke: css.getPropertyValue("--grid").trim(), width: 1 };
   const axisColor = css.getPropertyValue("--muted").trim();
 
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  tip.style.display = "none";
+  host.appendChild(tip);
+  w.tip = tip;
+
   w.plot = new uPlot({
     width: host.clientWidth || 900,
     height: Math.max(320, Math.round(window.innerHeight * 0.34)),
@@ -749,18 +755,38 @@ function drawWorld() {
 function onWorldCursor(u) {
   const i = u.cursor.idx;
   const out = $("w-readout");
-  if (i == null) { out.textContent = "グラフ上にカーソルを置くとその時点の値が出る"; return; }
+  if (i == null) {
+    out.textContent = "グラフ上にカーソルを置くとその時点の値が出る";
+    if (w.tip) w.tip.style.display = "none";
+    return;
+  }
   const meta = wIndicatorMeta();
   const day = Math.round(u.data[0][i] / DAY);
-  const parts = [];
+
+  const found = [];
   w.plotted.forEach((p) => {
     let best = null, bestDay = -Infinity;
     p.map.forEach((v, d) => { if (d <= day && d > bestDay) { bestDay = d; best = v; } });
-    if (best !== null) {
-      parts.push(`${p.c.name} ${best.toFixed(meta.decimals)}${meta.unit}`);
-    }
+    if (best !== null) found.push({ c: p.c, value: best });
   });
-  out.textContent = `${iso(day)}　|　${parts.join("　")}`;
+  found.sort((a, b) => b.value - a.value);
+
+  const text = (f) => `${f.value.toFixed(meta.decimals)}${meta.unit}`;
+  out.textContent = `${iso(day)}　|　` +
+    found.map((f) => `${f.c.name} ${text(f)}`).join("　");
+
+  // カーソルの位置に直接出す。値の大きい順に並べると線の並びと一致する。
+  if (!w.tip) return;
+  w.tip.innerHTML = `<div class="when">${iso(day)}</div>` + found.map((f) =>
+    `<div class="line"><span class="dot" style="background:${f.c.color}"></span>` +
+    `<span class="who">${f.c.name}</span><span class="val">${text(f)}</span></div>`).join("");
+  w.tip.style.display = "block";
+
+  const box = w.tip.getBoundingClientRect();
+  const right = u.cursor.left + 16;
+  const flip = right + box.width > u.bbox.width / devicePixelRatio;
+  w.tip.style.left = (flip ? u.cursor.left - box.width - 16 : right) + "px";
+  w.tip.style.top = Math.max(0, u.cursor.top - box.height / 2) + "px";
 }
 
 bootWorld();
