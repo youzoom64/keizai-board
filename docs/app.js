@@ -151,6 +151,21 @@ function buildFamilyPickers() {
   const host = $("pick-daily");
   host.className = "families";
   $("pick-monthly").remove();
+  state.familyBoxes = [];
+
+  const clearAll = document.createElement("button");
+  clearAll.type = "button";
+  clearAll.className = "clear-all";
+  clearAll.textContent = "全解除";
+  clearAll.title = "選んでいる系列を全部外す";
+  clearAll.addEventListener("click", () => {
+    state.selected.clear();
+    Object.values(state.series_checks).forEach((c) => { c.checked = false; });
+    state.familyBoxes.forEach((f) => updateFamilyCount(f.box, f.fam));
+    draw();
+    save();
+  });
+  host.appendChild(clearAll);
 
   state.meta.families.forEach((fam) => {
     const box = document.createElement("details");
@@ -186,6 +201,7 @@ function buildFamilyPickers() {
     box.addEventListener("toggle", save);
     host.appendChild(box);
     box._head = head;
+    state.familyBoxes.push({ box, fam });
     updateFamilyCount(box, fam);
   });
 }
