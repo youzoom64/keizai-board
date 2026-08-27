@@ -58,6 +58,8 @@ def collect(full: bool | None = None, only: list[str] | None = None,
                 points = _points_for(spec, full, mof_cache)
                 if not points:
                     raise ValueError("データが0件")
+                if series.scale != 1.0:
+                    points = [(d, v * series.scale) for d, v in points]
                 rows = store.upsert(conn, series.id, points)
                 store.log_fetch(conn, series.id, spec[0], rows, "ok")
                 report.append({"id": series.id, "label": series.label, "status": "ok",

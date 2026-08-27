@@ -32,6 +32,7 @@ class Series:
     cycle: str = CYCLE_DAILY
     suffix: str = ""      # 最新値の後ろに付ける単位
     note: str = ""        # 画面のツールチップに出す補足
+    scale: float = 1.0    # 取得値に掛ける倍率。10億円→兆円などの単位換算に使う
 
     @property
     def is_rate(self) -> bool:
@@ -126,6 +127,15 @@ MONTHLY: list[Series] = [
     Series("jobs_ratio", "有効求人倍率", "雇用", "倍", 2,
            ("dashboard", "0301020001000010010", "1", "1"), None,
            DIFF_PT, "#9ccc65", CYCLE_MONTHLY, "倍"),
+    Series("gdp_nominal", "名目GDP(実額)", "GDP", "兆円", 1,
+           ("dashboard", "0705010501000010000", "2", "2"), None,
+           DIFF_PCT, "#26a69a", CYCLE_QUARTERLY, "兆円",
+           "支出側・2020年基準・季節調整済みの年換算値。"
+           "債務残高との比や税収を語る時の分母はこちら", 0.001),
+    Series("gdp_nominal_rate", "名目GDP(前期比年率)", "前年比", "%", 1,
+           ("dashboard", "0705010501000060000", "2", "2"), None,
+           DIFF_PT, "#80cbc4", CYCLE_QUARTERLY, "%",
+           "実質との差がGDPデフレーター、つまり物価のぶん"),
     Series("gdp_real", "実質GDP(前期比年率)", "前年比", "%", 1,
            ("dashboard", "0705020501000060000", "2", "2"), None,
            DIFF_PT, "#7986cb", CYCLE_QUARTERLY, "%",
