@@ -200,7 +200,11 @@ def main(full: bool = True) -> None:
 
     written = export()
     for name, size in written.items():
-        print("  書き出し {:12} {:>9,} バイト".format(name, size))
+        # バイト数と版のハッシュが混ざるので、型で出し分ける
+        if isinstance(size, int):
+            print("  書き出し {:12} {:>9,} バイト".format(name, size))
+        else:
+            print("  書き出し {:12} {:>9}".format(name, size))
     if failed:
         # 一部が取れなくても、取れた分でサイトは更新する。落ちたことは記録に残す。
         print("警告: {} 系列が取得できなかった".format(len(failed)))
