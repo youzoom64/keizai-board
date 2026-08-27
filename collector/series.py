@@ -33,6 +33,7 @@ class Series:
     suffix: str = ""      # 最新値の後ろに付ける単位
     note: str = ""        # 画面のツールチップに出す補足
     scale: float = 1.0    # 取得値に掛ける倍率。10億円→兆円などの単位換算に使う
+    solid: bool = False   # 実線で描く。色が近くても線の形で見分けられるように
 
     @property
     def is_rate(self) -> bool:
@@ -40,10 +41,12 @@ class Series:
 
     @property
     def short_label(self) -> str:
-        """チェックボックス用の短い名前。月次はどれも前年比なので括弧を落とす。"""
-        for suffix in ("(前年同月比)", "(前期比年率)"):
-            if self.label.endswith(suffix):
-                return self.label[: -len(suffix)]
+        """チェックボックスに出す名前。
+
+        以前は「(前年同月比)」を落としていたが、指数を足したことで
+        「国内企業物価」と「国内企業物価 指数」が並び、どちらが何か
+        分からなくなった。正式名をそのまま出す。
+        """
         return self.label
 
     @property
@@ -86,6 +89,11 @@ MONTHLY: list[Series] = [
            ("dashboard", "0703010501010030010", "1", "1"),
            DIFF_PT, "#ff7043", CYCLE_MONTHLY, "%",
            "生鮮食品を除く総合。日銀が最も見る物価"),
+    # 指数は対になる前年比のすぐ隣に置く。離れていると見比べられない。
+    Series("cpi_core_index", "コアCPI 指数", "物価指数", "2020年=100", 1,
+           ("dashboard", "0703010501010090010", "1", "1"), None,
+           DIFF_PCT, "#3949ab", CYCLE_MONTHLY, "",
+           "生鮮食品を除く総合・2020年=100。川下の物価", solid=True),
     Series("cpi_all", "総合CPI(前年同月比)", "前年比", "%", 1,
            ("dashboard", "0703010601010030000", "1", "1"),
            ("dashboard", "0703010501010030000", "1", "1"),
@@ -100,10 +108,18 @@ MONTHLY: list[Series] = [
            DIFF_PT, "#ec407a", CYCLE_MONTHLY, "%",
            "日銀の国内企業物価指数(総平均)。企業間で取引される物の価格で、"
            "消費者物価より先に動きやすい"),
+    Series("cgpi_index", "国内企業物価 指数", "物価指数", "2020年=100", 1,
+           ("dashboard", "0703040400000090010", "1", "1"), None,
+           DIFF_PCT, "#00897b", CYCLE_MONTHLY, "",
+           "2020年=100。企業間で取引される物の値段", solid=True),
     Series("import_price_jpy", "輸入物価・円建(前年同月比)", "前年比", "%", 1,
            ("dashboard", "0703060401000030010", "1", "1"), None,
            DIFF_PT, "#ab47bc", CYCLE_MONTHLY, "%",
            "円ベース。契約通貨ベースとの差が、輸入インフレのうち円安由来の分になる"),
+    Series("import_price_index", "輸入物価・円建 指数", "物価指数", "2020年=100", 1,
+           ("dashboard", "0703060401000090010", "1", "1"), None,
+           DIFF_PCT, "#f9a825", CYCLE_MONTHLY, "",
+           "円ベース・2020年=100。川上の物価", solid=True),
     Series("import_price_ccy", "輸入物価・契約通貨(前年同月比)", "前年比", "%", 1,
            ("dashboard", "0703060402000030010", "1", "1"), None,
            DIFF_PT, "#ce93d8", CYCLE_MONTHLY, "%",
@@ -116,18 +132,6 @@ MONTHLY: list[Series] = [
            DIFF_PT, "#c5e1a5", CYCLE_MONTHLY, "%"),
     # 前年比だけだと「どこまで上がったか」が読めない。水準を並べると、
     # 川上（輸入）→川中（企業間）→川下（消費者）の伝わり方が形で見える。
-    Series("import_price_index", "輸入物価 指数", "物価指数", "2020年=100", 1,
-           ("dashboard", "0703060401000090010", "1", "1"), None,
-           DIFF_PCT, "#7e57c2", CYCLE_MONTHLY, "",
-           "円ベース・2020年=100。川上の物価"),
-    Series("cgpi_index", "国内企業物価 指数", "物価指数", "2020年=100", 1,
-           ("dashboard", "0703040400000090010", "1", "1"), None,
-           DIFF_PCT, "#f06292", CYCLE_MONTHLY, "",
-           "2020年=100。企業間で取引される物の値段"),
-    Series("cpi_core_index", "コアCPI 指数", "物価指数", "2020年=100", 1,
-           ("dashboard", "0703010501010090010", "1", "1"), None,
-           DIFF_PCT, "#ff5722", CYCLE_MONTHLY, "",
-           "生鮮食品を除く総合・2020年=100。川下の物価"),
     Series("wage_real", "実質賃金(前年同月比)", "前年比", "%", 1,
            ("dashboard", "0302030201010030010", "1", "1"), None,
            DIFF_PT, "#29b6f6", CYCLE_MONTHLY, "%",

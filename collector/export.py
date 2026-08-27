@@ -43,6 +43,7 @@ def _series_meta() -> list[dict]:
             "decimals": s.decimals, "color": s.color, "cycle": s.cycle,
             "diff": s.diff_style, "note": s.note,
             "alwaysRaw": s.always_raw,
+            "solid": s.solid,
         })
     return out
 

@@ -247,7 +247,8 @@ function draw() {
       width: 1.6,
       scale,
       spanGaps: true,
-      dash: p.meta.cycle === "D" ? undefined : [6, 4],
+      // 指数は実線、前年比は破線。色が近くても線の形で見分けられる。
+      dash: (p.meta.cycle === "D" || p.meta.solid) ? undefined : [6, 4],
       points: { show: p.n <= 5, size: 7 },
     });
     state.plotted.push({ ...p, scale });
