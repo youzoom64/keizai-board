@@ -132,6 +132,11 @@ MONTHLY: list[Series] = [
            DIFF_PCT, "#26a69a", CYCLE_QUARTERLY, "兆円",
            "支出側・2020年基準・季節調整済みの年換算値。"
            "債務残高との比や税収を語る時の分母はこちら", 0.001),
+    Series("gdp_real_amount", "実質GDP(実額)", "GDP", "兆円", 1,
+           ("dashboard", "0705020501000010000", "2", "2"), None,
+           DIFF_PCT, "#5c6bc0", CYCLE_QUARTERLY, "兆円",
+           "支出側・2020年基準・季節調整済みの年換算値。"
+           "名目との差が物価のぶん（GDPデフレーター）", 0.001),
     Series("gdp_nominal_rate", "名目GDP(前期比年率)", "前年比", "%", 1,
            ("dashboard", "0705010501000060000", "2", "2"), None,
            DIFF_PT, "#80cbc4", CYCLE_QUARTERLY, "%",
